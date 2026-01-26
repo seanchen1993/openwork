@@ -55,6 +55,14 @@ const accomplishAPI = {
     ipcRenderer.invoke('settings:set-debug-mode', enabled),
   getAppSettings: (): Promise<{ debugMode: boolean; onboardingComplete: boolean }> =>
     ipcRenderer.invoke('settings:app-settings'),
+  getOpenAiBaseUrl: (): Promise<string> =>
+    ipcRenderer.invoke('settings:openai-base-url:get'),
+  setOpenAiBaseUrl: (baseUrl: string): Promise<void> =>
+    ipcRenderer.invoke('settings:openai-base-url:set', baseUrl),
+  getOpenAiOauthStatus: (): Promise<{ connected: boolean; expires?: number }> =>
+    ipcRenderer.invoke('opencode:auth:openai:status'),
+  loginOpenAiWithChatGpt: (): Promise<{ ok: boolean; openedUrl?: string }> =>
+    ipcRenderer.invoke('opencode:auth:openai:login'),
 
   // API Key management (new simplified handlers)
   hasApiKey: (): Promise<boolean> =>
@@ -260,6 +268,12 @@ const accomplishAPI = {
     const listener = (_: unknown, data: { taskId: string; todos: Array<{ id: string; content: string; status: string; priority: string }> }) => callback(data);
     ipcRenderer.on('todo:update', listener);
     return () => ipcRenderer.removeListener('todo:update', listener);
+  },
+  // Auth error events (e.g., OAuth token expired)
+  onAuthError: (callback: (data: { providerId: string; message: string }) => void) => {
+    const listener = (_: unknown, data: { providerId: string; message: string }) => callback(data);
+    ipcRenderer.on('auth:error', listener);
+    return () => ipcRenderer.removeListener('auth:error', listener);
   },
 
   logEvent: (payload: { level?: string; message: string; context?: Record<string, unknown> }) =>

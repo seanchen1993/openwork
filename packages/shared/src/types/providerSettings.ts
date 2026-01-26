@@ -87,6 +87,11 @@ export interface AzureFoundryCredentials {
   keyPrefix?: string; // Only for api-key auth
 }
 
+export interface OAuthCredentials {
+  type: 'oauth';
+  oauthProvider: 'chatgpt';
+}
+
 export type ProviderCredentials =
   | ApiKeyCredentials
   | BedrockProviderCredentials
@@ -94,7 +99,8 @@ export type ProviderCredentials =
   | OpenRouterCredentials
   | LiteLLMCredentials
   | AzureFoundryCredentials
-  | LMStudioCredentials;
+  | LMStudioCredentials
+  | OAuthCredentials;
 
 /** Tool support status for a model */
 export type ToolSupportStatus = 'supported' | 'unsupported' | 'unknown';
@@ -142,7 +148,7 @@ export function getActiveProvider(settings: ProviderSettings | null | undefined)
  */
 export const DEFAULT_MODELS: Partial<Record<ProviderId, string>> = {
   anthropic: 'anthropic/claude-haiku-4-5',
-  openai: 'openai/gpt-5-codex',
+  openai: 'openai/gpt-5.2-codex',
   google: 'google/gemini-3-pro-preview',
   xai: 'xai/grok-4',
   bedrock: 'amazon-bedrock/anthropic.claude-haiku-4-5-20251001-v1:0',
