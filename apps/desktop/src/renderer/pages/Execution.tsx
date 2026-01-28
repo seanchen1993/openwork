@@ -885,8 +885,8 @@ export default function ExecutionPage() {
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               transition={springs.bouncy}
             >
-              <Card className="w-full max-w-lg p-6 mx-4">
-                <div className="flex items-start gap-4">
+              <Card className="w-full max-w-lg p-6 mx-4 max-h-[80vh] flex flex-col">
+                <div className="flex items-start gap-4 min-h-0 flex-1 overflow-hidden">
                   <div className={cn(
                     "flex h-10 w-10 items-center justify-center rounded-full shrink-0",
                     isDeleteOperation(permissionRequest) ? "bg-red-500/10" :
@@ -903,7 +903,7 @@ export default function ExecutionPage() {
                       <AlertCircle className="h-5 w-5 text-warning" />
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 overflow-y-auto">
                     <h3 className={cn(
                       "text-lg font-semibold mb-2",
                       isDeleteOperation(permissionRequest) ? "text-red-600" : "text-foreground"
