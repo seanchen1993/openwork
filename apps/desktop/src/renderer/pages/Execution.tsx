@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { XCircle, CornerDownLeft, ArrowLeft, CheckCircle2, AlertCircle, AlertTriangle, Terminal, Wrench, FileText, Search, Code, Brain, Clock, Square, Play, Download, File, Bug, ChevronUp, ChevronDown, Trash2, Check, Copy, Globe, MousePointer2, Type, Image, Keyboard, ArrowUpDown, ListChecks, Layers, Highlighter, ListOrdered, Upload, Move, Frame, ShieldCheck, MessageCircleQuestion, CheckCircle, Lightbulb, Flag, Plus, ArrowUp } from 'lucide-react';
+import { XCircle, CornerDownLeft, ArrowLeft, CheckCircle2, AlertCircle, AlertTriangle, Terminal, Wrench, FileText, Search, Code, Brain, Clock, Square, Play, Download, File, Bug, ChevronUp, ChevronDown, ChevronRight, Trash2, Check, Copy, Globe, MousePointer2, Type, Image, Keyboard, ArrowUpDown, ListChecks, Layers, Highlighter, ListOrdered, Upload, Move, Frame, ShieldCheck, MessageCircleQuestion, CheckCircle, Lightbulb, Flag, Plus, ArrowUp, ArrowRight } from 'lucide-react';
 import ModelSelectorInline from '../components/ModelSelectorInline';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
@@ -163,6 +163,57 @@ function getDisplayFilePaths(request: { filePath?: string; filePaths?: string[] 
     return [request.filePath];
   }
   return [];
+}
+
+// Message group types
+type MessageGroup = {
+  type: 'user';
+  message: TaskMessage;
+} | {
+  type: 'steps';
+  messages: TaskMessage[];
+  isComplete: boolean;
+};
+
+// Group messages for collapsible display
+function groupMessagesForDisplay(messages: TaskMessage[]): MessageGroup[] {
+  const groups: MessageGroup[] = [];
+  let currentStepGroup: TaskMessage[] = [];
+
+  for (let i = 0; i < messages.length; i++) {
+    const message = messages[i];
+
+    if (message.type === 'user') {
+      // Flush current step group
+      if (currentStepGroup.length > 0) {
+        groups.push({
+          type: 'steps',
+          messages: currentStepGroup,
+          isComplete: true,
+        });
+        currentStepGroup = [];
+      }
+      // Add user message
+      groups.push({
+        type: 'user',
+        message,
+      });
+    } else {
+      // Accumulate assistant/tool/system messages
+      currentStepGroup.push(message);
+    }
+  }
+
+  // Flush remaining steps
+  if (currentStepGroup.length > 0) {
+    groups.push({
+      type: 'steps',
+      messages: currentStepGroup,
+      isComplete: true,
+    });
+  }
+
+  return groups;
 }
 
 export default function ExecutionPage() {
@@ -606,8 +657,8 @@ export default function ExecutionPage() {
 
     <div className="h-full flex flex-col bg-[var(--cowork-bg)] relative">
       {/* Task header - Cowork style with dropdown */}
-      <div className="flex-shrink-0 bg-[var(--cowork-bg)] px-6 pt-14 pb-4">
-        <div className="max-w-3xl mx-auto">
+      <div className="flex-shrink-0 bg-[var(--cowork-bg)] px-8 pt-14 pb-4">
+        <div className="max-w-2xl mx-auto">
           <button 
             className="flex items-center gap-2 text-sm text-foreground hover:text-foreground/80 transition-colors"
             onClick={() => navigate('/')}
@@ -720,10 +771,10 @@ export default function ExecutionPage() {
 
       {/* Queued state - inline (follow-up, has previous messages) */}
       {currentTask.status === 'queued' && currentTask.messages.length > 0 && (
-        <div className="flex-1 overflow-y-auto px-6 py-6">
-          <div className="max-w-4xl mx-auto space-y-4">
+        <div className="flex-1 overflow-y-auto px-8 py-6">
+          <div className="max-w-2xl mx-auto space-y-3">
             {currentTask.messages
-              .filter((m) => !(m.type === 'tool' && m.toolName?.toLowerCase() === 'bash'))
+              .filter((m) => !(m.type === 'tool' && m.toolName?.toLowerCase() === 'todowrite'))
               .map((message) => (
               <MessageBubble key={message.id} message={message} />
             ))}
@@ -757,15 +808,18 @@ export default function ExecutionPage() {
       {currentTask.status !== 'queued' && (
         <div className="flex-1 flex overflow-hidden">
           {/* Messages area */}
-          <div className="flex-1 overflow-y-auto px-6 py-6" ref={scrollContainerRef} onScroll={handleScroll} data-testid="messages-scroll-container">
-            <div className="max-w-3xl mx-auto space-y-4">
-            {currentTask.messages
-              .filter((m) => !(m.type === 'tool' && m.toolName?.toLowerCase() === 'bash'))
-              .map((message, index, filteredMessages) => {
-              const isLastMessage = index === filteredMessages.length - 1;
-              const isLastAssistantMessage =
-                message.type === 'assistant' && isLastMessage;
-              // Find the last assistant message index for the continue button
+          <div className="flex-1 overflow-y-auto px-8 py-6" ref={scrollContainerRef} onScroll={handleScroll} data-testid="messages-scroll-container">
+            <div className="max-w-2xl mx-auto space-y-3">
+            {(() => {
+              // Only filter out todowrite tool messages
+              const filteredMessages = currentTask.messages.filter(
+                (m) => !(m.type === 'tool' && m.toolName?.toLowerCase() === 'todowrite')
+              );
+
+              // Group messages for collapsible display
+              const groups = groupMessagesForDisplay(filteredMessages);
+
+              // Find last assistant message for continue button
               let lastAssistantIndex = -1;
               for (let i = filteredMessages.length - 1; i >= 0; i--) {
                 if (filteredMessages[i].type === 'assistant') {
@@ -773,27 +827,70 @@ export default function ExecutionPage() {
                   break;
                 }
               }
-              const isLastAssistantForContinue = index === lastAssistantIndex;
-              // Show continue button on last assistant message when:
-              // - Task was interrupted (user can always continue)
-              // - Task completed AND the message indicates agent is waiting for user action
-              const showContinue = isLastAssistantForContinue && !!hasSession &&
-                (currentTask.status === 'interrupted' ||
-                 (currentTask.status === 'completed' && isWaitingForUser(message.content)));
-              return (
-                <MessageBubble
-                  key={message.id}
-                  message={message}
-                  shouldStream={isLastAssistantMessage && currentTask.status === 'running'}
-                  isLastMessage={isLastMessage}
-                  isRunning={currentTask.status === 'running'}
-                  showContinueButton={showContinue}
-                  continueLabel={currentTask.status === 'interrupted' ? 'Continue' : 'Done, Continue'}
-                  onContinue={handleContinue}
-                  isLoading={isLoading}
-                />
-              );
-            })}
+
+              return groups.map((group, groupIndex) => {
+                const isLastGroup = groupIndex === groups.length - 1;
+
+                if (group.type === 'user') {
+                  // Render user message
+                  return (
+                    <MessageBubble
+                      key={group.message.id}
+                      message={group.message}
+                      shouldStream={false}
+                      isLastMessage={false}
+                      isRunning={false}
+                      showContinueButton={false}
+                      isLoading={false}
+                    />
+                  );
+                }
+
+                // Render step group with CollapsibleSteps
+                const lastMessage = group.messages[group.messages.length - 1];
+                const isLastMessageAssistant = lastMessage?.type === 'assistant';
+                const isLastAssistantForContinue = lastMessage &&
+                  filteredMessages[lastAssistantIndex]?.id === lastMessage.id;
+
+                const showContinue = isLastAssistantForContinue && !!hasSession &&
+                  (currentTask.status === 'interrupted' ||
+                   (currentTask.status === 'completed' && isWaitingForUser(lastMessage.content)));
+
+                const shouldStream = isLastGroup &&
+                  isLastMessageAssistant &&
+                  currentTask.status === 'running';
+
+                return (
+                  <div key={group.messages[0].id}>
+                    {group.messages.length === 1 ? (
+                      // Single message - render normally
+                      <MessageBubble
+                        message={group.messages[0]}
+                        shouldStream={shouldStream}
+                        isLastMessage={isLastGroup}
+                        isRunning={currentTask.status === 'running'}
+                        showContinueButton={showContinue}
+                        continueLabel={currentTask.status === 'interrupted' ? 'Continue' : 'Done, Continue'}
+                        onContinue={handleContinue}
+                        isLoading={isLoading}
+                      />
+                    ) : (
+                      // Multiple messages - use CollapsibleSteps
+                      <CollapsibleStepsGroup
+                        messages={group.messages}
+                        isComplete={group.isComplete}
+                        shouldStream={shouldStream}
+                        showContinueButton={showContinue}
+                        continueLabel={currentTask.status === 'interrupted' ? 'Continue' : 'Done, Continue'}
+                        onContinue={handleContinue}
+                        isLoading={isLoading}
+                        isRunning={currentTask.status === 'running'}
+                      />
+                    )}
+                  </div>
+                );
+              });
+            })()}
 
             <AnimatePresence>
               {currentTask.status === 'running' && !permissionRequest && (
@@ -1146,55 +1243,40 @@ export default function ExecutionPage() {
 
 {/* Running state input with Stop button */}
       {currentTask.status === 'running' && !permissionRequest && (
-        <div className="flex-shrink-0 border-t border-border bg-card/50 px-6 py-4">
-          <div className="max-w-4xl mx-auto flex gap-3">
-            <Input
-              placeholder="Agent is working..."
-              disabled
-              className="flex-1 opacity-50"
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={interruptTask}
-              title="Stop agent (Ctrl+C)"
-              className="shrink-0 hover:bg-destructive/10 hover:text-destructive hover:border-destructive"
-              data-testid="execution-stop-button"
-            >
-              <Square className="h-4 w-4 fill-current" />
-            </Button>
+        <div className="flex-shrink-0 bg-[var(--cowork-bg)] px-8 py-6">
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-card rounded-2xl shadow-sm">
+              <div className="flex items-center gap-3 px-4 py-4">
+                <Input
+                  placeholder="AI 正在工作中..."
+                  disabled
+                  className="flex-1 !border-0 !shadow-none !ring-0 focus-visible:!ring-0 focus-visible:!border-0 px-0 text-base opacity-50 bg-transparent"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={interruptTask}
+                  title="停止 (Ctrl+C)"
+                  className="shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  data-testid="execution-stop-button"
+                >
+                  <Square className="h-4 w-4 fill-current mr-2" />
+                  停止
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Follow-up input - Cowork style */}
+      {/* Follow-up input - Simple style without borders */}
       {canFollowUp && (
-        <div className="flex-shrink-0 bg-[var(--cowork-bg)] px-6 py-4">
-          <div className="max-w-3xl mx-auto">
-            {speechInput.error && (
-              <Alert
-                variant="destructive"
-                className="mb-2 py-2 px-3 flex items-center gap-2 [&>svg]:static [&>svg~*]:pl-0"
-              >
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="text-xs leading-tight">
-                  {speechInput.error.message}
-                  {speechInput.error.code === 'EMPTY_RESULT' && (
-                    <button
-                      onClick={() => speechInput.retry()}
-                      className="ml-2 underline hover:no-underline"
-                      type="button"
-                    >
-                      重试
-                    </button>
-                  )}
-                </AlertDescription>
-              </Alert>
-            )}
-            {/* Cowork-style input container */}
-            <div className="bg-card rounded-xl border border-border shadow-sm">
+        <div className="flex-shrink-0 bg-[var(--cowork-bg)] px-8 py-6">
+          <div className="max-w-2xl mx-auto">
+            {/* Input Container */}
+            <div className="bg-card rounded-2xl shadow-sm">
               {/* Input area */}
-              <div className="p-3">
+              <div className="flex items-center gap-3 px-4 py-4">
                 <Input
                   ref={followUpInputRef}
                   value={followUp}
@@ -1208,42 +1290,18 @@ export default function ExecutionPage() {
                     }
                   }}
                   placeholder="回复..."
-                  disabled={isLoading || speechInput.isRecording}
-                  className="border-0 shadow-none focus-visible:ring-0 px-0 text-base"
+                  disabled={isLoading}
+                  className="flex-1 !border-0 !shadow-none !ring-0 focus-visible:!ring-0 focus-visible:!border-0 px-0 text-base h-auto bg-transparent"
                   data-testid="execution-follow-up-input"
                 />
-              </div>
-              {/* Bottom actions bar */}
-              <div className="flex items-center justify-between px-3 py-2 border-t border-border">
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                  <SpeechInputButton
-                    isRecording={speechInput.isRecording}
-                    isTranscribing={speechInput.isTranscribing}
-                    recordingDuration={speechInput.recordingDuration}
-                    error={speechInput.error}
-                    isConfigured={speechInput.isConfigured}
-                    disabled={isLoading}
-                    onStartRecording={() => speechInput.startRecording()}
-                    onStopRecording={() => speechInput.stopRecording()}
-                    onRetry={() => speechInput.retry()}
-                    onOpenSettings={handleOpenSpeechSettings}
-                    size="md"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <ModelSelectorInline />
-                  <Button
-                    onClick={handleFollowUp}
-                    disabled={!followUp.trim() || isLoading || speechInput.isRecording}
-                    size="icon"
-                    className="h-9 w-9 rounded-full bg-[var(--cowork-primary)] hover:bg-[var(--cowork-primary)]/90"
-                  >
-                    <ArrowUp className="h-4 w-4" />
-                  </Button>
-                </div>
+                <Button
+                  onClick={handleFollowUp}
+                  disabled={!followUp.trim() || isLoading}
+                  className="gap-2 px-5 bg-[var(--cowork-primary)] hover:bg-[var(--cowork-primary)]/90 text-white shrink-0"
+                >
+                  发送
+                  <ArrowUp className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </div>
@@ -1252,16 +1310,19 @@ export default function ExecutionPage() {
 
       {/* Completed/Failed state (no session to continue) */}
       {isComplete && !canFollowUp && (
-        <div className="flex-shrink-0 bg-[var(--cowork-bg)] px-6 py-4 text-center">
-          <p className="text-sm text-muted-foreground mb-3">
-            任务{currentTask.status === 'interrupted' ? '已停止' : currentTask.status === 'completed' ? '已完成' : '失败'}
-          </p>
-          <Button 
-            onClick={() => navigate('/')}
-            className="bg-[var(--cowork-primary)] hover:bg-[var(--cowork-primary)]/90"
-          >
-            开始新任务
-          </Button>
+        <div className="flex-shrink-0 bg-[var(--cowork-bg)] px-8 py-6">
+          <div className="max-w-2xl mx-auto text-center">
+            <p className="text-sm text-muted-foreground mb-4">
+              任务{currentTask.status === 'interrupted' ? '已停止' : currentTask.status === 'completed' ? '已完成' : '失败'}
+            </p>
+            <Button
+              onClick={() => navigate('/')}
+              className="gap-2 px-5 bg-[var(--cowork-primary)] hover:bg-[var(--cowork-primary)]/90 text-white"
+            >
+              开始新任务
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       )}
 
@@ -1399,13 +1460,128 @@ interface MessageBubbleProps {
   isLoading?: boolean;
 }
 
-const COPIED_STATE_DURATION_MS = 1000
+// CollapsibleStepsGroup component
+interface CollapsibleStepsGroupProps {
+  messages: TaskMessage[];
+  isComplete: boolean;
+  shouldStream: boolean;
+  showContinueButton: boolean;
+  continueLabel?: string;
+  onContinue?: () => void;
+  isLoading: boolean;
+  isRunning: boolean;
+}
+
+const CollapsibleStepsGroup = memo(function CollapsibleStepsGroup({
+  messages,
+  isComplete,
+  shouldStream,
+  showContinueButton,
+  continueLabel,
+  onContinue,
+  isLoading,
+  isRunning,
+}: CollapsibleStepsGroupProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Get summary from last assistant message
+  const lastAssistantMsg = [...messages].reverse().find(m => m.type === 'assistant');
+  let summary = '执行步骤';
+  if (lastAssistantMsg) {
+    // Take first non-empty line, max 80 chars
+    const firstLine = lastAssistantMsg.content.split('\n').find(line => line.trim()) || '';
+    summary = firstLine.length > 80 ? firstLine.slice(0, 80) + '...' : firstLine;
+  }
+
+  // Split into intermediate steps and final message
+  const finalMessage = messages[messages.length - 1];
+  const intermediateSteps = messages.slice(0, -1);
+
+  // Should collapse if there are multiple messages
+  const shouldCollapse = messages.length > 2;
+
+  if (!shouldCollapse) {
+    // Don't collapse - render all messages normally
+    return (
+      <>
+        {messages.map((msg, idx) => {
+          const isLast = idx === messages.length - 1;
+          return (
+            <MessageBubble
+              key={msg.id}
+              message={msg}
+              shouldStream={isLast && shouldStream}
+              isLastMessage={isLast}
+              isRunning={isRunning}
+              showContinueButton={isLast && showContinueButton}
+              continueLabel={continueLabel}
+              onContinue={onContinue}
+              isLoading={isLoading}
+            />
+          );
+        })}
+      </>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      {/* Collapsible header - minimal design like Cowork */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center gap-2.5 py-1.5 text-left group hover:bg-muted/30 rounded-md transition-colors -mx-1 px-1"
+      >
+        <span className="flex-1 text-sm text-muted-foreground/90 truncate">{summary}</span>
+        {isExpanded ? (
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+        ) : (
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+        )}
+      </button>
+
+      {/* Expanded intermediate steps */}
+      <AnimatePresence>
+        {isExpanded && intermediateSteps.length > 0 && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={springs.gentle}
+            className="overflow-hidden pl-5 space-y-1"
+          >
+            {intermediateSteps.map((msg) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                shouldStream={false}
+                isLastMessage={false}
+                isRunning={false}
+                showContinueButton={false}
+                isLoading={false}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Final message - always visible */}
+      <MessageBubble
+        message={finalMessage}
+        shouldStream={shouldStream}
+        isLastMessage={true}
+        isRunning={isRunning}
+        showContinueButton={showContinueButton}
+        continueLabel={continueLabel}
+        onContinue={onContinue}
+        isLoading={isLoading}
+      />
+    </div>
+  );
+});
 
 // Memoized MessageBubble to prevent unnecessary re-renders and markdown re-parsing
 const MessageBubble = memo(function MessageBubble({ message, shouldStream = false, isLastMessage = false, isRunning = false, showContinueButton = false, continueLabel, onContinue, isLoading = false }: MessageBubbleProps) {
   const [streamComplete, setStreamComplete] = useState(!shouldStream);
-  const [copied, setCopied] = useState(false);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isUser = message.type === 'user';
   const isTool = message.type === 'tool';
   const isSystem = message.type === 'system';
@@ -1428,52 +1604,26 @@ const MessageBubble = memo(function MessageBubble({ message, shouldStream = fals
     }
   }, [shouldStream]);
 
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(message.content);
-      setCopied(true);
-
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-
-      timeoutRef.current = setTimeout(() => {
-        setCopied(false);
-      }, COPIED_STATE_DURATION_MS);
-    } catch (error) {
-      console.error('Failed to copy to clipboard:', error);
-    }
-  }, [message.content]);
-
-  const showCopyButton = !isTool && !(isAssistant && showContinueButton);
 
   const proseClasses = cn(
-    'text-sm prose prose-sm max-w-none',
-    'prose-headings:text-foreground',
-    'prose-p:text-foreground prose-p:my-2',
+    'text-[15px] leading-relaxed prose prose-sm max-w-none',
+    'prose-headings:text-foreground prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-2',
+    'prose-p:text-foreground prose-p:my-1.5 prose-p:leading-relaxed',
     'prose-strong:text-foreground prose-strong:font-semibold',
     'prose-em:text-foreground',
-    'prose-code:text-foreground prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs',
-    'prose-pre:bg-muted prose-pre:text-foreground prose-pre:p-3 prose-pre:rounded-lg',
-    'prose-ul:text-foreground prose-ol:text-foreground',
-    'prose-li:text-foreground prose-li:my-1',
+    'prose-code:text-foreground prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-[13px]',
+    'prose-pre:bg-muted prose-pre:text-foreground prose-pre:p-3 prose-pre:rounded-lg prose-pre:my-2',
+    'prose-ul:text-foreground prose-ol:text-foreground prose-ul:my-2 prose-ol:my-2',
+    'prose-li:text-foreground prose-li:my-0.5',
     'prose-a:text-primary prose-a:underline',
-    'prose-blockquote:text-muted-foreground prose-blockquote:border-l-4 prose-blockquote:border-border prose-blockquote:pl-4',
-    'prose-hr:border-border',
+    'prose-blockquote:text-muted-foreground prose-blockquote:border-l-4 prose-blockquote:border-border prose-blockquote:pl-4 prose-blockquote:my-2',
+    'prose-hr:border-border prose-hr:my-3',
     'break-words'
   );
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={springs.gentle}
       className={cn('flex flex-col group', isUser ? 'items-end' : 'items-start')}
@@ -1484,112 +1634,99 @@ const MessageBubble = memo(function MessageBubble({ message, shouldStream = fals
           actions={(message.toolInput as { actions: Array<{ action: string; url?: string; selector?: string; ref?: string; text?: string; key?: string }> }).actions}
           isRunning={isLastMessage && isRunning}
         />
+      ) : isTool ? (
+        /* Tool messages: show execution details like Cowork */
+        <div className="flex items-start gap-2.5 py-1.5">
+          {ToolIcon ? <ToolIcon className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground/50" /> : <Terminal className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground/50" />}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                执行 {toolDisplayInfo?.label || toolName || '操作'}
+              </span>
+              {isLastMessage && isRunning && (
+                <SpinningIcon className="h-3.5 w-3.5" />
+              )}
+            </div>
+            {/* Show tool input for Bash commands */}
+            {message.toolInput && typeof message.toolInput === 'object' && 'command' in message.toolInput ? (
+              <pre className="mt-2 text-[13px] leading-relaxed text-foreground/80 font-mono bg-muted/40 rounded-md px-3 py-2 overflow-x-auto border border-border/30">
+                {String((message.toolInput as { command: unknown }).command)}
+              </pre>
+            ) : null}
+            {/* Show description if available */}
+            {message.toolInput && typeof message.toolInput === 'object' && 'description' in message.toolInput ? (
+              <p className="mt-1 text-xs text-muted-foreground/70">
+                {String((message.toolInput as { description: unknown }).description)}
+              </p>
+            ) : null}
+          </div>
+        </div>
       ) : (
       <div
         className={cn(
-          'max-w-[85%] rounded-2xl px-4 py-3 transition-all duration-150 relative',
+          'max-w-full transition-all duration-150 relative',
           isUser
-            ? 'bg-primary text-primary-foreground'
-            : isTool
-              ? 'bg-muted border border-border'
-              : isSystem
-                ? 'bg-muted/50 border border-border'
-                : 'bg-card border border-border'
+            ? 'bg-primary text-primary-foreground rounded-2xl px-4 py-3'
+            : isSystem
+              ? 'text-muted-foreground text-sm'
+              : 'text-foreground'
         )}
       >
-        {/* Tool messages: show only label and loading animation */}
-        {isTool ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
-            {ToolIcon ? <ToolIcon className="h-4 w-4" /> : <Wrench className="h-4 w-4" />}
-            <span>{toolDisplayInfo?.label || toolName || 'Processing'}</span>
-            {isLastMessage && isRunning && (
-              <SpinningIcon className="h-3.5 w-3.5 ml-1" />
-            )}
+        {/* Non-tool messages */}
+        {isSystem && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            <Terminal className="h-3 w-3" />
+            <span className="font-medium">System</span>
           </div>
-        ) : (
-          <>
-            {isSystem && (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5 font-medium">
-                <Terminal className="h-3.5 w-3.5" />
-                System
-              </div>
-            )}
-            {isUser ? (
-              <p
-                className={cn(
-                  'text-sm whitespace-pre-wrap break-words',
-                  'text-primary-foreground'
-                )}
-              >
-                {message.content}
-              </p>
-            ) : isAssistant && shouldStream && !streamComplete ? (
-              <StreamingText
-                text={message.content}
-                speed={120}
-                isComplete={streamComplete}
-                onComplete={() => setStreamComplete(true)}
-              >
-                {(streamedText) => (
-                  <div className={proseClasses}>
-                    <ReactMarkdown>{streamedText}</ReactMarkdown>
-                  </div>
-                )}
-              </StreamingText>
-            ) : (
-              <div className={proseClasses}>
-                <ReactMarkdown>{message.content}</ReactMarkdown>
-              </div>
-            )}
-            <p
-              className={cn(
-                'text-xs mt-1.5',
-                isUser ? 'text-primary-foreground/70' : 'text-muted-foreground'
-              )}
-            >
-              {new Date(message.timestamp).toLocaleTimeString()}
-            </p>
-            {/* Continue button inside assistant bubble */}
-            {isAssistant && showContinueButton && onContinue && (
-              <Button
-                size="sm"
-                onClick={onContinue}
-                disabled={isLoading}
-                className="mt-3 gap-1.5"
-              >
-                <Play className="h-3 w-3" />
-                {continueLabel || 'Continue'}
-              </Button>
-            )}
-          </>
         )}
-        {showCopyButton && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={handleCopy}
-                data-testid="message-copy-button"
-                className={cn(
-                  'absolute bottom-2 right-2',
-                  'opacity-0 group-hover:opacity-100 transition-all duration-200',
-                  'p-1 rounded',
-                  isUser ? 'hover:bg-primary-foreground/20' : 'hover:bg-accent',
-                  isUser
-                    ? (!copied ? 'text-primary-foreground/70 hover:text-primary-foreground' : '!bg-green-500/20 !text-green-300')
-                    : (!copied ? 'text-muted-foreground hover:text-foreground' : '!bg-green-500/10 !text-green-600')
-                )}
-                aria-label={'Copy to clipboard'}
-              >
-                <Check className={cn("absolute h-4 w-4", !copied && 'hidden')} />
-                <Copy className={cn("absolute h-4 w-4", copied && 'hidden')} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <span>Copy to clipboard</span>
-            </TooltipContent>
-          </Tooltip>
+        {isUser ? (
+          <p
+            className={cn(
+              'text-sm whitespace-pre-wrap break-words',
+              'text-primary-foreground'
+            )}
+          >
+            {message.content}
+          </p>
+        ) : isAssistant && shouldStream && !streamComplete ? (
+          <StreamingText
+            text={message.content}
+            speed={120}
+            isComplete={streamComplete}
+            onComplete={() => setStreamComplete(true)}
+          >
+            {(streamedText) => (
+              <div className={proseClasses}>
+                <ReactMarkdown>{streamedText}</ReactMarkdown>
+              </div>
+            )}
+          </StreamingText>
+        ) : (
+          <div className={proseClasses}>
+            <ReactMarkdown>{message.content}</ReactMarkdown>
+          </div>
+        )}
+        {!isUser && (
+          <p className="text-xs mt-2 text-muted-foreground/60">
+            {new Date(message.timestamp).toLocaleTimeString()}
+          </p>
+        )}
+        {isUser && (
+          <p className="text-xs mt-1.5 text-primary-foreground/70">
+            {new Date(message.timestamp).toLocaleTimeString()}
+          </p>
+        )}
+        {/* Continue button inside assistant bubble */}
+        {isAssistant && showContinueButton && onContinue && (
+          <Button
+            size="sm"
+            onClick={onContinue}
+            disabled={isLoading}
+            className="mt-3 gap-1.5"
+          >
+            <Play className="h-3 w-3" />
+            {continueLabel || 'Continue'}
+          </Button>
         )}
       </div>
       )}
