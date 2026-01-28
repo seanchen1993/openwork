@@ -513,17 +513,14 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   loadTaskById: async (taskId: string) => {
     const accomplish = getAccomplish();
     const task = await accomplish.getTask(taskId);
-    const currentState = get();
-    
-    // Clear todos only if loading a different task
-    const shouldClearTodos = currentState.todosTaskId !== taskId;
-    
-    // Also restore the working directory from the task
-    set({ 
-      currentTask: task, 
+
+    // Restore todos and working directory from the task
+    set({
+      currentTask: task,
       error: task ? null : 'Task not found',
       workingDirectory: task?.workingDirectory || null,
-      ...(shouldClearTodos ? { todos: [], todosTaskId: null } : {}),
+      todos: task?.todos || [],
+      todosTaskId: task ? taskId : null,
     });
   },
 

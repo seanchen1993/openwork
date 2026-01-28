@@ -20,6 +20,7 @@ import {
   updateTaskStatus,
   updateTaskSessionId,
   updateTaskSummary,
+  updateTaskTodos,
   addTaskMessage,
   deleteTask,
   clearHistory,
@@ -453,6 +454,9 @@ export function registerIPCHandlers(): void {
       },
 
       onTodoUpdate: (todos: TodoItem[]) => {
+        // Save todos to database
+        updateTaskTodos(taskId, todos);
+        // Forward to renderer
         forwardToRenderer('todo:update', { taskId, todos });
       },
 
@@ -714,6 +718,9 @@ export function registerIPCHandlers(): void {
       },
 
       onTodoUpdate: (todos: TodoItem[]) => {
+        // Save todos to database
+        updateTaskTodos(taskId, todos);
+        // Forward to renderer
         forwardToRenderer('todo:update', { taskId, todos });
       },
     };

@@ -1,6 +1,6 @@
 // apps/desktop/src/main/store/repositories/taskHistory.ts
 
-import type { Task, TaskMessage, TaskStatus, TaskAttachment } from '@accomplish/shared';
+import type { Task, TaskMessage, TaskStatus, TaskAttachment, TodoItem } from '@accomplish/shared';
 import { getDatabase } from '../db';
 
 export interface StoredTask {
@@ -11,6 +11,7 @@ export interface StoredTask {
   messages: TaskMessage[];
   sessionId?: string;
   workingDirectory?: string;
+  todos?: TodoItem[];
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
@@ -23,6 +24,7 @@ interface TaskRow {
   status: string;
   session_id: string | null;
   working_directory: string | null;
+  todos: string | null;
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
@@ -96,6 +98,7 @@ function rowToTask(row: TaskRow): StoredTask {
     status: row.status as TaskStatus,
     sessionId: row.session_id || undefined,
     workingDirectory: row.working_directory || undefined,
+    todos: row.todos ? JSON.parse(row.todos) : undefined,
     createdAt: row.created_at,
     startedAt: row.started_at || undefined,
     completedAt: row.completed_at || undefined,
@@ -128,8 +131,8 @@ export function saveTask(task: Task): void {
     // Upsert task
     db.prepare(
       `INSERT OR REPLACE INTO tasks
-        (id, prompt, summary, status, session_id, working_directory, created_at, started_at, completed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        (id, prompt, summary, status, session_id, working_directory, todos, created_at, started_at, completed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       task.id,
       task.prompt,
@@ -137,6 +140,7 @@ export function saveTask(task: Task): void {
       task.status,
       task.sessionId || null,
       task.workingDirectory || null,
+      task.todos ? JSON.stringify(task.todos) : null,
       task.createdAt,
       task.startedAt || null,
       task.completedAt || null
@@ -249,6 +253,14 @@ export function updateTaskSessionId(taskId: string, sessionId: string): void {
 export function updateTaskSummary(taskId: string, summary: string): void {
   const db = getDatabase();
   db.prepare('UPDATE tasks SET summary = ? WHERE id = ?').run(summary, taskId);
+}
+
+export function updateTaskTodos(taskId: string, todos: TodoItem[]): void {
+  const db = getDatabase();
+  db.prepare('UPDATE tasks SET todos = ? WHERE id = ?').run(
+    JSON.stringify(todos),
+    taskId
+  );
 }
 
 export function deleteTask(taskId: string): void {

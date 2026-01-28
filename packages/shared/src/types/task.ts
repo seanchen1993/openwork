@@ -2,6 +2,8 @@
  * Task-related types for execution management
  */
 
+import type { TodoItem } from './todo';
+
 export type TaskStatus =
   | 'pending'
   | 'queued'
@@ -38,6 +40,8 @@ export interface Task {
   sessionId?: string;
   /** Working directory for this task */
   workingDirectory?: string;
+  /** Todo items for tracking task progress */
+  todos?: TodoItem[];
   messages: TaskMessage[];
   createdAt: string;
   startedAt?: string;
