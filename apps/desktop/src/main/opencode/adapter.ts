@@ -1068,6 +1068,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
   /**
    * Escape a shell argument for safe execution.
+   * Includes [ and ] to prevent glob expansion in zsh/bash.
    */
   private escapeShellArg(arg: string): string {
     if (process.platform === 'win32') {
@@ -1076,7 +1077,8 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       }
       return arg;
     } else {
-      const needsEscaping = ["'", ' ', '$', '`', '\\', '"', '\n'].some(c => arg.includes(c));
+      // Include [ and ] to prevent glob expansion in zsh/bash
+      const needsEscaping = ["'", ' ', '$', '`', '\\', '"', '\n', '[', ']', '*', '?', '!', '(', ')', '{', '}', '~'].some(c => arg.includes(c));
       if (needsEscaping) {
         return `'${arg.replace(/'/g, "'\\''")}'`;
       }

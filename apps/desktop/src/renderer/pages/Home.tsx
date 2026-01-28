@@ -60,7 +60,7 @@ const QUICK_TASKS = [
     id: 'organize-files',
     title: '整理文件',
     icon: FolderOpen,
-    prompt: '整理[文件夹或文件]。请提出任何澄清问题，并分享你将如何处理这项任务的计划。',
+    prompt: '整理当前文件夹。请提出任何澄清问题，并分享你将如何处理这项任务的计划。',
   },
   {
     id: 'prep-meeting',

@@ -62,7 +62,9 @@ function quoteForShell(arg: string): string {
     }
     return arg;
   }
-  if (arg.includes("'") || arg.includes(' ') || arg.includes('"')) {
+  // Include [ and ] to prevent glob expansion in zsh/bash
+  const needsQuoting = ["'", ' ', '"', '[', ']', '*', '?', '!', '(', ')', '{', '}', '~', '$', '`', '\\'].some(c => arg.includes(c));
+  if (needsQuoting) {
     return `'${arg.replace(/'/g, "'\\''")}'`;
   }
   return arg;
