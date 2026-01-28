@@ -12,13 +12,20 @@ import ConversationListItem from './ConversationListItem';
 import SettingsDialog from './SettingsDialog';
 import { Settings, MessageSquarePlus } from 'lucide-react';
 
-// Cmb Cowork Logo - orange starburst
+// Logo - elegant serif style like Claude
 const CmbCoworkLogo = () => (
-  <div className="flex items-center gap-2">
-    <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M24 4L26.5 18L41 10L30 21.5L44 24L30 26.5L41 38L26.5 30L24 44L21.5 30L7 38L18 26.5L4 24L18 21.5L7 10L21.5 18L24 4Z" fill="#E07B54" />
-    </svg>
-    <span className="text-sm font-semibold text-foreground">Cmb Cowork</span>
+  <div className="flex items-center justify-center">
+    <span 
+      className="text-[23px] text-foreground"
+      style={{ 
+        fontFamily: 'Tiempos, Georgia, "Times New Roman", Times, serif',
+        fontWeight: 450,
+        letterSpacing: '-0.02em',
+        lineHeight: 1
+      }}
+    >
+      Cmb Cowork
+    </span>
   </div>
 );
 
@@ -56,8 +63,8 @@ export default function Sidebar() {
   return (
     <>
       <div className="flex h-screen w-[240px] flex-col border-r border-border bg-[var(--cowork-bg)] pt-4">
-        {/* Logo - Top Left */}
-        <div className="px-4 py-3 pt-8">
+        {/* Logo - Top Center */}
+        <div className="px-4 py-4 pt-10">
           <CmbCoworkLogo />
         </div>
 
@@ -110,23 +117,17 @@ export default function Sidebar() {
           </div>
         </ScrollArea>
 
-        {/* Info text */}
-        <div className="px-4 py-3 text-xs text-muted-foreground">
-          这些任务在本地运行，不会跨设备同步
-        </div>
-
         {/* Bottom Section - Settings */}
-        <div className="px-3 py-3 border-t border-border flex items-center justify-end">
-          {/* Settings Button */}
+        <div className="px-4 py-4 border-t border-border/50">
           <Button
             data-testid="sidebar-settings-button"
             variant="ghost"
             size="icon"
             onClick={() => setShowSettings(true)}
             title="设置"
-            className="h-8 w-8"
+            className="h-11 w-11 rounded-lg hover:bg-muted/80"
           >
-            <Settings className="h-4 w-4" />
+            <Settings className="h-[22px] w-[22px]" />
           </Button>
         </div>
       </div>

@@ -171,7 +171,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   startTask: async (config: TaskConfig) => {
     const accomplish = getAccomplish();
-    set({ isLoading: true, error: null });
+    // Clear old todos when starting a new task
+    set({ isLoading: true, error: null, todos: [], todosTaskId: null });
     try {
       void accomplish.logEvent({
         level: 'info',
@@ -425,21 +426,13 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         );
       }
 
-      // Determine if we should clear todos
-      // Only clear todos if:
-      // 1. They belong to this task
-      // 2. Task is fully completed (not interrupted - user can still continue)
-      let shouldClearTodos = false;
-      if ((event.type === 'complete' || event.type === 'error') && state.todosTaskId === event.taskId) {
-        const isInterrupted = event.type === 'complete' && event.result?.status === 'interrupted';
-        shouldClearTodos = !isInterrupted;
-      }
+      // Don't clear todos on task completion - keep them visible so user can see final state
+      // Todos will be cleared when starting a new task or loading a different task
 
       return {
         currentTask: updatedCurrentTask,
         tasks: updatedTasks,
         isLoading: false,
-        ...(shouldClearTodos ? { todos: [], todosTaskId: null } : {}),
       };
     });
   },
@@ -520,11 +513,17 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   loadTaskById: async (taskId: string) => {
     const accomplish = getAccomplish();
     const task = await accomplish.getTask(taskId);
+    const currentState = get();
+    
+    // Clear todos only if loading a different task
+    const shouldClearTodos = currentState.todosTaskId !== taskId;
+    
     // Also restore the working directory from the task
     set({ 
       currentTask: task, 
       error: task ? null : 'Task not found',
       workingDirectory: task?.workingDirectory || null,
+      ...(shouldClearTodos ? { todos: [], todosTaskId: null } : {}),
     });
   },
 

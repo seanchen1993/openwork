@@ -33,6 +33,10 @@ interface TaskInputBarProps {
    * Minimal style without border/shadow (for embedding).
    */
   minimal?: boolean;
+  /**
+   * Hide the speech/microphone button.
+   */
+  hideSpeechButton?: boolean;
 }
 
 export default function TaskInputBar({
@@ -48,6 +52,7 @@ export default function TaskInputBar({
   autoSubmitOnTranscription = true,
   hideSubmitButton = false,
   minimal = false,
+  hideSpeechButton = false,
 }: TaskInputBarProps) {
   const isDisabled = disabled || isLoading;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -156,20 +161,22 @@ export default function TaskInputBar({
         />
 
         {/* Speech Input Button */}
-        <SpeechInputButton
-          isRecording={speechInput.isRecording}
-          isTranscribing={speechInput.isTranscribing}
-          recordingDuration={speechInput.recordingDuration}
-          error={speechInput.error}
-          isConfigured={speechInput.isConfigured}
-          disabled={isDisabled}
-          onStartRecording={() => speechInput.startRecording()}
-          onStopRecording={() => speechInput.stopRecording()}
-          onCancel={() => speechInput.cancelRecording()}
-          onRetry={() => speechInput.retry()}
-          onOpenSettings={onOpenSpeechSettings}
-          size="md"
-        />
+        {!hideSpeechButton && (
+          <SpeechInputButton
+            isRecording={speechInput.isRecording}
+            isTranscribing={speechInput.isTranscribing}
+            recordingDuration={speechInput.recordingDuration}
+            error={speechInput.error}
+            isConfigured={speechInput.isConfigured}
+            disabled={isDisabled}
+            onStartRecording={() => speechInput.startRecording()}
+            onStopRecording={() => speechInput.stopRecording()}
+            onCancel={() => speechInput.cancelRecording()}
+            onRetry={() => speechInput.retry()}
+            onOpenSettings={onOpenSpeechSettings}
+            size="md"
+          />
+        )}
 
         {/* Submit button - optional */}
         {!hideSubmitButton && (

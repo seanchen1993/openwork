@@ -10,17 +10,14 @@ import {
   FolderOpen, 
   Calendar, 
   MessageSquare,
-  AlertTriangle,
-  Plus,
   ArrowRight,
   Folder,
   FileText as FileIcon,
-  Wrench,
+  Plus,
 } from 'lucide-react';
 import TaskInputBar from '../components/landing/TaskInputBar';
 import QuickTaskCard from '../components/landing/QuickTaskCard';
 import FolderSelector from '../components/FolderSelector';
-import ModelSelectorInline from '../components/ModelSelectorInline';
 import SettingsDialog from '../components/layout/SettingsDialog';
 import { useTaskStore } from '../stores/taskStore';
 import { getAccomplish } from '../lib/accomplish';
@@ -29,12 +26,6 @@ import { Button } from '@/components/ui/button';
 import { hasAnyReadyProvider } from '@accomplish/shared';
 import { PanelSection } from '../components/layout/RightPanel';
 
-// Cowork logo component - orange/coral starburst
-const CoworkLogo = () => (
-  <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M24 4L26.5 18L41 10L30 21.5L44 24L30 26.5L41 38L26.5 30L24 44L21.5 30L7 38L18 26.5L4 24L18 21.5L7 10L21.5 18L24 4Z" fill="#E07B54" />
-  </svg>
-);
 
 // Quick task definitions - Chinese
 const QUICK_TASKS = [
@@ -149,11 +140,6 @@ export default function HomePage() {
     }
   };
 
-  const handleOpenSpeechSettings = useCallback(() => {
-    setSettingsInitialTab('voice');
-    setShowSettingsDialog(true);
-  }, []);
-
   const handleApiKeySaved = async () => {
     setShowSettingsDialog(false);
     if (prompt.trim()) {
@@ -175,38 +161,20 @@ export default function HomePage() {
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto px-8 pt-16 pb-32">
             <div className="max-w-2xl mx-auto">
-              {/* Logo and Title */}
+              {/* Title */}
               <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={springs.gentle}
-                className="mb-8"
+                className="mb-10"
               >
-                <CoworkLogo />
                 <h1 
                   data-testid="home-title"
-                  className="mt-4 text-3xl font-serif text-foreground"
-                  style={{ fontFamily: 'Georgia, serif' }}
+                  className="text-[32px] text-foreground leading-tight"
+                  style={{ fontFamily: 'Georgia, "Times New Roman", Times, serif', fontWeight: 400, letterSpacing: '-0.01em' }}
                 >
-                  让我们完成待办清单上的任务
+                  一起搞定待办清单吧
                 </h1>
-              </motion.div>
-
-              {/* Info Banner */}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ ...springs.gentle, delay: 0.1 }}
-                className="mb-8 p-4 rounded-xl bg-card border border-border"
-              >
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-muted-foreground">
-                    <p>
-                      Cmb Cowork 是一个早期研究预览版。新的改进会频繁发布。
-                    </p>
-                  </div>
-                </div>
               </motion.div>
 
               {/* Quick Task Cards - 2 rows x 3 columns */}
@@ -233,11 +201,11 @@ export default function HomePage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ ...springs.gentle, delay: 0.3 }}
-            className="flex-shrink-0 bg-[var(--cowork-bg)] border-t border-border px-8 py-4"
+            className="flex-shrink-0 bg-[var(--cowork-bg)] px-8 py-6"
           >
             <div className="max-w-2xl mx-auto">
               {/* Input Container */}
-              <div className="bg-card rounded-xl border border-border shadow-sm">
+              <div className="bg-card rounded-2xl border border-border shadow-sm">
                 {/* Text Input Area */}
                 <div className="p-4">
                   <TaskInputBar
@@ -248,34 +216,26 @@ export default function HomePage() {
                     placeholder="今天我能帮你做什么？"
                     large={false}
                     autoFocus={true}
-                    onOpenSpeechSettings={handleOpenSpeechSettings}
                     autoSubmitOnTranscription={false}
                     hideSubmitButton={true}
                     minimal={true}
+                    hideSpeechButton={true}
                   />
                 </div>
 
                 {/* Bottom Actions Bar */}
-                <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                <div className="flex items-center justify-between px-4 py-3">
                   <div className="flex items-center gap-2">
                     {/* Folder Selector */}
                     <FolderSelector onFolderSelect={setWorkingDirectory} />
-                    
-                    {/* Add Attachment Button */}
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <Plus className="w-4 h-4" />
-                    </Button>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {/* Model Selector */}
-                    <ModelSelectorInline />
-                    
+                  <div className="flex items-center gap-3">
                     {/* Submit Button */}
                     <Button
                       onClick={handleSubmit}
                       disabled={!prompt.trim() || isLoading}
-                      className="gap-2 bg-[var(--cowork-primary)] hover:bg-[var(--cowork-primary)]/90 text-white"
+                      className="gap-2 px-5 bg-[var(--cowork-primary)] hover:bg-[var(--cowork-primary)]/90 text-white"
                     >
                       开始
                       <ArrowRight className="w-4 h-4" />
@@ -292,7 +252,7 @@ export default function HomePage() {
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={springs.gentle}
-          className="w-[280px] h-full flex-shrink-0 border-l border-border bg-card/50 overflow-y-auto"
+          className="w-[320px] h-full flex-shrink-0 border-l border-border bg-card/50 overflow-y-auto"
         >
           <div className="p-4 pt-14 space-y-4">
             {/* Progress Panel */}

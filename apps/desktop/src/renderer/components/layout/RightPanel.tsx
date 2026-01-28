@@ -18,7 +18,7 @@ export default function RightPanel({ children, visible = true }: RightPanelProps
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: 20 }}
           transition={springs.gentle}
-          className="w-[280px] h-screen flex-shrink-0 border-l border-border bg-card/50 overflow-y-auto"
+          className="w-[320px] h-screen flex-shrink-0 border-l border-border bg-card/50 overflow-y-auto"
         >
           <div className="p-4 pt-14 space-y-4">
             {children}
