@@ -14,7 +14,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { XCircle, CornerDownLeft, ArrowLeft, CheckCircle2, AlertCircle, AlertTriangle, Terminal, Wrench, FileText, Search, Code, Brain, Clock, Square, Play, Download, File, Bug, ChevronUp, ChevronDown, Trash2, Check, Copy, Globe, MousePointer2, Type, Image, Keyboard, ArrowUpDown, ListChecks, Layers, Highlighter, ListOrdered, Upload, Move, Frame, ShieldCheck, MessageCircleQuestion, CheckCircle, Lightbulb, Flag } from 'lucide-react';
+import { XCircle, CornerDownLeft, ArrowLeft, CheckCircle2, AlertCircle, AlertTriangle, Terminal, Wrench, FileText, Search, Code, Brain, Clock, Square, Play, Download, File, Bug, ChevronUp, ChevronDown, Trash2, Check, Copy, Globe, MousePointer2, Type, Image, Keyboard, ArrowUpDown, ListChecks, Layers, Highlighter, ListOrdered, Upload, Move, Frame, ShieldCheck, MessageCircleQuestion, CheckCircle, Lightbulb, Flag, Plus, ArrowUp } from 'lucide-react';
+import ModelSelectorInline from '../components/ModelSelectorInline';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { StreamingText } from '../components/ui/streaming-text';
@@ -22,7 +23,7 @@ import { isWaitingForUser } from '../lib/waiting-detection';
 import { BrowserScriptCard } from '../components/BrowserScriptCard';
 import loadingSymbol from '/assets/loading-symbol.svg';
 import SettingsDialog from '../components/layout/SettingsDialog';
-import { TodoSidebar } from '../components/TodoSidebar';
+// TodoSidebar removed - todos now shown in right panel only
 import { useSpeechInput } from '../hooks/useSpeechInput';
 import { SpeechInputButton } from '../components/ui/SpeechInputButton';
 
@@ -603,28 +604,19 @@ export default function ExecutionPage() {
         initialTab={settingsInitialTab}
       />
 
-    <div className="h-full flex flex-col bg-background relative">
-      {/* Task header */}
-      <div className="flex-shrink-0 border-b border-border bg-card/50 px-6 py-4">
-        <div className="flex items-center justify-between max-w-4xl mx-auto">
-          <div className="flex items-center gap-4 min-w-0 flex-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate('/')}
-              className="shrink-0 no-drag"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <h1 className="text-base font-medium text-foreground truncate min-w-0">
-                {currentTask.prompt}
-              </h1>
-              <span data-testid="execution-status-badge">
-                {getStatusBadge()}
-              </span>
-            </div>
-          </div>
+    <div className="h-full flex flex-col bg-[var(--cowork-bg)] relative">
+      {/* Task header - Cowork style with dropdown */}
+      <div className="flex-shrink-0 bg-[var(--cowork-bg)] px-6 pt-14 pb-4">
+        <div className="max-w-3xl mx-auto">
+          <button 
+            className="flex items-center gap-2 text-sm text-foreground hover:text-foreground/80 transition-colors"
+            onClick={() => navigate('/')}
+          >
+            <span className="font-medium truncate max-w-md">
+              {currentTask.summary || currentTask.prompt.slice(0, 50)}
+            </span>
+            <ChevronDown className="h-4 w-4 flex-shrink-0" />
+          </button>
         </div>
       </div>
 
@@ -766,7 +758,7 @@ export default function ExecutionPage() {
         <div className="flex-1 flex overflow-hidden">
           {/* Messages area */}
           <div className="flex-1 overflow-y-auto px-6 py-6" ref={scrollContainerRef} onScroll={handleScroll} data-testid="messages-scroll-container">
-            <div className="max-w-4xl mx-auto space-y-4">
+            <div className="max-w-3xl mx-auto space-y-4">
             {currentTask.messages
               .filter((m) => !(m.type === 'tool' && m.toolName?.toLowerCase() === 'bash'))
               .map((message, index, filteredMessages) => {
@@ -873,12 +865,7 @@ export default function ExecutionPage() {
             </div>
           </div>
 
-          {/* Todo sidebar - only shown when todos exist for this task */}
-          <AnimatePresence>
-            {todosTaskId === id && todos.length > 0 && (
-              <TodoSidebar todos={todos} />
-            )}
-          </AnimatePresence>
+          {/* Todo sidebar removed - todos now shown in right panel Progress section */}
         </div>
       )}
 
@@ -1180,10 +1167,10 @@ export default function ExecutionPage() {
         </div>
       )}
 
-      {/* Follow-up input */}
+      {/* Follow-up input - Cowork style */}
       {canFollowUp && (
-        <div className="flex-shrink-0 border-t border-border bg-card/50 px-6 py-4">
-          <div className="max-w-4xl mx-auto">
+        <div className="flex-shrink-0 bg-[var(--cowork-bg)] px-6 py-4">
+          <div className="max-w-3xl mx-auto">
             {speechInput.error && (
               <Alert
                 variant="destructive"
@@ -1198,58 +1185,66 @@ export default function ExecutionPage() {
                       className="ml-2 underline hover:no-underline"
                       type="button"
                     >
-                      Retry
+                      重试
                     </button>
                   )}
                 </AlertDescription>
               </Alert>
             )}
-            {/* Input field with Send button */}
-            <div className="flex gap-3">
-              <Input
-                ref={followUpInputRef}
-                value={followUp}
-                onChange={(e) => setFollowUp(e.target.value)}
-                onKeyDown={(e) => {
-                  // Ignore Enter during IME composition (Chinese/Japanese input)
-                  if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleFollowUp();
-                  }
-                }}
-                placeholder={
-                  currentTask.status === 'interrupted'
-                    ? (hasSession ? "Give new instructions..." : "Send a new instruction to retry...")
-                    : currentTask.status === 'completed'
-                      ? "Give new instructions..."
-                      : "Ask for something..."
-                }
-                disabled={isLoading || speechInput.isRecording}
-                className="flex-1"
-                data-testid="execution-follow-up-input"
-              />
-              <SpeechInputButton
-                isRecording={speechInput.isRecording}
-                isTranscribing={speechInput.isTranscribing}
-                recordingDuration={speechInput.recordingDuration}
-                error={speechInput.error}
-                isConfigured={speechInput.isConfigured}
-                disabled={isLoading}
-                onStartRecording={() => speechInput.startRecording()}
-                onStopRecording={() => speechInput.stopRecording()}
-                onRetry={() => speechInput.retry()}
-                onOpenSettings={handleOpenSpeechSettings}
-                size="md"
-              />
-              <Button
-                onClick={handleFollowUp}
-                disabled={!followUp.trim() || isLoading || speechInput.isRecording}
-                variant="outline"
-              >
-                <CornerDownLeft className="h-4 w-4 mr-1.5" />
-                Send
-              </Button>
+            {/* Cowork-style input container */}
+            <div className="bg-card rounded-xl border border-border shadow-sm">
+              {/* Input area */}
+              <div className="p-3">
+                <Input
+                  ref={followUpInputRef}
+                  value={followUp}
+                  onChange={(e) => setFollowUp(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Ignore Enter during IME composition (Chinese/Japanese input)
+                    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleFollowUp();
+                    }
+                  }}
+                  placeholder="回复..."
+                  disabled={isLoading || speechInput.isRecording}
+                  className="border-0 shadow-none focus-visible:ring-0 px-0 text-base"
+                  data-testid="execution-follow-up-input"
+                />
+              </div>
+              {/* Bottom actions bar */}
+              <div className="flex items-center justify-between px-3 py-2 border-t border-border">
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                  <SpeechInputButton
+                    isRecording={speechInput.isRecording}
+                    isTranscribing={speechInput.isTranscribing}
+                    recordingDuration={speechInput.recordingDuration}
+                    error={speechInput.error}
+                    isConfigured={speechInput.isConfigured}
+                    disabled={isLoading}
+                    onStartRecording={() => speechInput.startRecording()}
+                    onStopRecording={() => speechInput.stopRecording()}
+                    onRetry={() => speechInput.retry()}
+                    onOpenSettings={handleOpenSpeechSettings}
+                    size="md"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <ModelSelectorInline />
+                  <Button
+                    onClick={handleFollowUp}
+                    disabled={!followUp.trim() || isLoading || speechInput.isRecording}
+                    size="icon"
+                    className="h-9 w-9 rounded-full bg-[var(--cowork-primary)] hover:bg-[var(--cowork-primary)]/90"
+                  >
+                    <ArrowUp className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1257,12 +1252,15 @@ export default function ExecutionPage() {
 
       {/* Completed/Failed state (no session to continue) */}
       {isComplete && !canFollowUp && (
-        <div className="flex-shrink-0 border-t border-border bg-card/50 px-6 py-4 text-center">
+        <div className="flex-shrink-0 bg-[var(--cowork-bg)] px-6 py-4 text-center">
           <p className="text-sm text-muted-foreground mb-3">
-            Task {currentTask.status === 'interrupted' ? 'stopped' : currentTask.status}
+            任务{currentTask.status === 'interrupted' ? '已停止' : currentTask.status === 'completed' ? '已完成' : '失败'}
           </p>
-          <Button onClick={() => navigate('/')}>
-            Start New Task
+          <Button 
+            onClick={() => navigate('/')}
+            className="bg-[var(--cowork-primary)] hover:bg-[var(--cowork-primary)]/90"
+          >
+            开始新任务
           </Button>
         </div>
       )}

@@ -10,6 +10,7 @@ export interface StoredTask {
   status: TaskStatus;
   messages: TaskMessage[];
   sessionId?: string;
+  workingDirectory?: string;
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
@@ -21,6 +22,7 @@ interface TaskRow {
   summary: string | null;
   status: string;
   session_id: string | null;
+  working_directory: string | null;
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
@@ -93,6 +95,7 @@ function rowToTask(row: TaskRow): StoredTask {
     summary: row.summary || undefined,
     status: row.status as TaskStatus,
     sessionId: row.session_id || undefined,
+    workingDirectory: row.working_directory || undefined,
     createdAt: row.created_at,
     startedAt: row.started_at || undefined,
     completedAt: row.completed_at || undefined,
@@ -125,14 +128,15 @@ export function saveTask(task: Task): void {
     // Upsert task
     db.prepare(
       `INSERT OR REPLACE INTO tasks
-        (id, prompt, summary, status, session_id, created_at, started_at, completed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        (id, prompt, summary, status, session_id, working_directory, created_at, started_at, completed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       task.id,
       task.prompt,
       task.summary || null,
       task.status,
       task.sessionId || null,
+      task.workingDirectory || null,
       task.createdAt,
       task.startedAt || null,
       task.completedAt || null

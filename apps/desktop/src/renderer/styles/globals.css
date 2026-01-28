@@ -43,28 +43,38 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Shadcn-inspired theme variables */
+/* Shadcn-inspired theme variables with Cowork-style colors */
 :root {
-  --background: 0 0% 97.6%; /* #f9f9f9 */
-  --foreground: 0 0% 12.5%; /* #202020 */
-  --card: 0 0% 98.8%; /* #fcfcfc */
-  --card-foreground: 0 0% 12.5%; /* #202020 */
-  --popover: 0 0% 98.8%; /* #fcfcfc */
-  --popover-foreground: 0 0% 12.5%; /* #202020 */
-  --primary: 123 30% 20%; /* #213c20 */
+  /* Cowork color scheme */
+  --cowork-bg: #F5F3EF;
+  --cowork-bg-hsl: 40 20% 95%;
+  --cowork-card: #FFFFFF;
+  --cowork-primary: #C4A77D;
+  --cowork-primary-hsl: 35 38% 63%;
+  --cowork-text: #2D2D2D;
+  --cowork-border: #E8E4DE;
+  
+  /* Base theme variables - updated for Cowork style */
+  --background: 40 20% 95%; /* Cowork cream background #F5F3EF */
+  --foreground: 0 0% 18%; /* #2D2D2D */
+  --card: 0 0% 100%; /* #FFFFFF */
+  --card-foreground: 0 0% 18%; /* #2D2D2D */
+  --popover: 0 0% 100%; /* #FFFFFF */
+  --popover-foreground: 0 0% 18%; /* #2D2D2D */
+  --primary: 35 38% 63%; /* Cowork brown/tan #C4A77D */
   --primary-foreground: 0 0% 100%; /* #ffffff */
-  --secondary: 120 14% 85%; /* #d8dfd7 */
-  --secondary-foreground: 100 20% 18%; /* #2b391e */
-  --muted: 0 0% 93.7%; /* #efefef */
-  --muted-foreground: 0 0% 39.2%; /* #646464 */
-  --accent: 0 0% 91%; /* #e8e8e8 */
-  --accent-foreground: 0 0% 12.5%; /* #202020 */
+  --secondary: 40 15% 90%; /* Light tan */
+  --secondary-foreground: 0 0% 25%; 
+  --muted: 40 10% 92%; /* Light cream */
+  --muted-foreground: 0 0% 45%; /* Medium gray */
+  --accent: 40 15% 88%; /* Subtle tan accent */
+  --accent-foreground: 0 0% 18%; /* #2D2D2D */
   --destructive: 8 78% 54%; /* #e54d2e */
   --destructive-foreground: 0 0% 100%; /* #ffffff */
-  --border: 12 8% 90%; /* #eae2e1 */
-  --input: 0 0% 84.7%; /* #d8d8d8 */
-  --ring: 20 25% 33%; /* #644a40 */
-  --radius: 0.5rem;
+  --border: 35 15% 88%; /* Cowork border #E8E4DE */
+  --input: 35 10% 85%; 
+  --ring: 35 38% 50%; /* Darker Cowork primary */
+  --radius: 0.75rem;
 }
 
 /* Custom scrollbar */

@@ -68,6 +68,10 @@ interface TaskState {
   openLauncher: () => void;
   closeLauncher: () => void;
 
+  // Working directory for tasks
+  workingDirectory: string | null;
+  recentFolders: string[];
+
   // Actions
   startTask: (config: TaskConfig) => Promise<Task | null>;
   setSetupProgress: (taskId: string | null, message: string | null) => void;
@@ -91,6 +95,9 @@ interface TaskState {
   clearTodos: () => void;
   setAuthError: (error: { providerId: string; message: string }) => void;
   clearAuthError: () => void;
+  setWorkingDirectory: (path: string | null) => void;
+  addRecentFolder: (path: string) => void;
+  loadRecentFolders: () => Promise<void>;
 }
 
 function createMessageId(): string {
@@ -112,6 +119,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   todosTaskId: null,
   authError: null,
   isLauncherOpen: false,
+  workingDirectory: null,
+  recentFolders: [],
 
   setSetupProgress: (taskId: string | null, message: string | null) => {
     // Detect which package is being downloaded from the message
@@ -511,7 +520,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   loadTaskById: async (taskId: string) => {
     const accomplish = getAccomplish();
     const task = await accomplish.getTask(taskId);
-    set({ currentTask: task, error: task ? null : 'Task not found' });
+    // Also restore the working directory from the task
+    set({ 
+      currentTask: task, 
+      error: task ? null : 'Task not found',
+      workingDirectory: task?.workingDirectory || null,
+    });
   },
 
   deleteTask: async (taskId: string) => {
@@ -543,6 +557,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       todosTaskId: null,
       authError: null,
       isLauncherOpen: false,
+      workingDirectory: null,
+      // Don't reset recentFolders - keep history
     });
   },
 
@@ -564,6 +580,40 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   openLauncher: () => set({ isLauncherOpen: true }),
   closeLauncher: () => set({ isLauncherOpen: false }),
+
+  setWorkingDirectory: (path: string | null) => {
+    set({ workingDirectory: path });
+    // Add to recent folders if not null
+    if (path) {
+      get().addRecentFolder(path);
+    }
+  },
+
+  addRecentFolder: (path: string) => {
+    set((state) => {
+      const filtered = state.recentFolders.filter((f) => f !== path);
+      const updated = [path, ...filtered].slice(0, 10); // Keep last 10
+      // Persist to localStorage
+      try {
+        localStorage.setItem('recentFolders', JSON.stringify(updated));
+      } catch {
+        // Ignore storage errors
+      }
+      return { recentFolders: updated };
+    });
+  },
+
+  loadRecentFolders: async () => {
+    try {
+      const stored = localStorage.getItem('recentFolders');
+      if (stored) {
+        const folders = JSON.parse(stored) as string[];
+        set({ recentFolders: folders });
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  },
 }));
 
 // Startup stages that should be tracked (before first tool runs)

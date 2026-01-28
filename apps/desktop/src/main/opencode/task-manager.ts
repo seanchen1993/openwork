@@ -479,6 +479,7 @@ export class TaskManager {
       id: taskId,
       prompt: config.prompt,
       status: 'queued',
+      workingDirectory: config.workingDirectory,
       messages: [],
       createdAt: new Date().toISOString(),
     };
@@ -574,6 +575,7 @@ export class TaskManager {
       id: taskId,
       prompt: config.prompt,
       status: 'running',
+      workingDirectory: config.workingDirectory,
       messages: [],
       createdAt: new Date().toISOString(),
     };

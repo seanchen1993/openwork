@@ -67,20 +67,20 @@ export default function ConversationListItem({ task }: ConversationListItemProps
       }}
       title={task.summary || task.prompt}
       className={cn(
-        'w-full text-left px-3 py-2 rounded-md text-sm transition-colors duration-200',
-        'text-zinc-700 hover:bg-accent hover:text-accent-foreground',
+        'w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors duration-200',
+        'text-foreground/80 hover:bg-muted hover:text-foreground',
         'flex items-center gap-2 group relative cursor-pointer',
-        isActive && 'bg-accent text-accent-foreground'
+        isActive && 'bg-muted text-foreground'
       )}
     >
       {getStatusIcon()}
-      <span className="block truncate flex-1">{task.summary || task.prompt}</span>
+      <span className="block truncate flex-1 text-[13px]">{task.summary || task.prompt}</span>
       <button
         onClick={handleDelete}
         className={cn(
           'opacity-0 group-hover:opacity-100 transition-opacity duration-200',
-          'p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/20',
-          'text-zinc-400 hover:text-red-600 dark:hover:text-red-400',
+          'p-1 rounded hover:bg-destructive/10',
+          'text-muted-foreground hover:text-destructive',
           'shrink-0'
         )}
         aria-label="Delete task"

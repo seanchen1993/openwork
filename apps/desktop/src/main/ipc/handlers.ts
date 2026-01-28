@@ -2357,6 +2357,39 @@ export function registerIPCHandlers(): void {
     }
   });
 
+  // Shell: Open path in system file manager
+  handle('shell:open-path', async (_event: IpcMainInvokeEvent, path: string) => {
+    try {
+      // Validate path exists
+      if (!fs.existsSync(path)) {
+        throw new Error('Path does not exist');
+      }
+      return await shell.openPath(path);
+    } catch (error) {
+      console.error('Failed to open path:', error);
+      throw error;
+    }
+  });
+
+  // Folder: Open folder selection dialog
+  handle('folder:select', async (_event: IpcMainInvokeEvent) => {
+    const window = BrowserWindow.getFocusedWindow();
+    if (!window) {
+      throw new Error('No focused window');
+    }
+    
+    const result = await dialog.showOpenDialog(window, {
+      properties: ['openDirectory'],
+      title: 'Select a folder to work in',
+    });
+    
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+    
+    return result.filePaths[0];
+  });
+
   // Log event handler - now just returns ok (no external logging)
   handle(
     'log:event',

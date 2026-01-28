@@ -13,6 +13,10 @@ import ExecutionPage from './pages/Execution';
 
 // Components
 import Sidebar from './components/layout/Sidebar';
+import RightPanel from './components/layout/RightPanel';
+import ProgressPanel from './components/panels/ProgressPanel';
+import WorkingFolderPanel from './components/panels/WorkingFolderPanel';
+import ContextPanel from './components/panels/ContextPanel';
 import { TaskLauncher } from './components/TaskLauncher';
 import { AuthErrorToast } from './components/AuthErrorToast';
 import SettingsDialog from './components/layout/SettingsDialog';
@@ -29,7 +33,19 @@ export default function App() {
   const location = useLocation();
 
   // Get store state and actions
-const { openLauncher, authError, clearAuthError } = useTaskStore();
+  const { 
+    openLauncher, 
+    authError, 
+    clearAuthError,
+    currentTask,
+    todos,
+    todosTaskId,
+    workingDirectory,
+  } = useTaskStore();
+
+  // Determine if we should show the right panel (only on execution page)
+  const isExecutionPage = location.pathname.startsWith('/execution/');
+  const showRightPanel = isExecutionPage;
 
   // Handle re-login from auth error toast
   const handleAuthReLogin = useCallback(() => {
@@ -65,7 +81,7 @@ const { openLauncher, authError, clearAuthError } = useTaskStore();
     const checkStatus = async () => {
       // Check if running in Electron
       if (!isRunningInElectron()) {
-        setErrorMessage('This application must be run inside the Openwork desktop app.');
+        setErrorMessage('此应用程序必须在 Cmb Cowork 桌面应用中运行。');
         setStatus('error');
         return;
       }
@@ -104,7 +120,7 @@ const { openLauncher, authError, clearAuthError } = useTaskStore();
               <AlertTriangle className="h-8 w-8 text-destructive" />
             </div>
           </div>
-          <h1 className="mb-2 text-xl font-semibold text-foreground">Unable to Start</h1>
+          <h1 className="mb-2 text-xl font-semibold text-foreground">无法启动</h1>
           <p className="text-muted-foreground">{errorMessage}</p>
         </div>
       </div>
@@ -113,7 +129,7 @@ const { openLauncher, authError, clearAuthError } = useTaskStore();
 
   // Ready - render the app with sidebar
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-[var(--cowork-bg)]">
       {/* Invisible drag region for window dragging (macOS hiddenInset titlebar) */}
       <div className="drag-region fixed top-0 left-0 right-0 h-10 z-50 pointer-events-none" />
       <Sidebar />
@@ -154,6 +170,20 @@ const { openLauncher, authError, clearAuthError } = useTaskStore();
           </Routes>
         </AnimatePresence>
       </main>
+      
+      {/* Right Panel - only shown on execution page */}
+      <RightPanel visible={showRightPanel}>
+        <ProgressPanel 
+          todos={todosTaskId === currentTask?.id ? todos : []} 
+        />
+        <WorkingFolderPanel 
+          workingDirectory={workingDirectory} 
+        />
+        <ContextPanel 
+          messages={currentTask?.messages || []} 
+        />
+      </RightPanel>
+
       <TaskLauncher />
 
       {/* Auth Error Toast - shown when OAuth session expires */}

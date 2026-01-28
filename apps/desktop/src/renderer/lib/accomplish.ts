@@ -31,6 +31,10 @@ interface AccomplishAPI {
 
   // Shell
   openExternal(url: string): Promise<void>;
+  openPath?(path: string): Promise<string>;
+
+  // Folder selection
+  selectFolder?(): Promise<string | null>;
 
   // Task operations
   startTask(config: TaskConfig): Promise<Task>;

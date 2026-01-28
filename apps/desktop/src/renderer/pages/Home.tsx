@@ -2,90 +2,92 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+import { 
+  FileText, 
+  BarChart3, 
+  Palette, 
+  FolderOpen, 
+  Calendar, 
+  MessageSquare,
+  AlertTriangle,
+  Plus,
+  ArrowRight,
+  Folder,
+  FileText as FileIcon,
+  Wrench,
+} from 'lucide-react';
 import TaskInputBar from '../components/landing/TaskInputBar';
+import QuickTaskCard from '../components/landing/QuickTaskCard';
+import FolderSelector from '../components/FolderSelector';
+import ModelSelectorInline from '../components/ModelSelectorInline';
 import SettingsDialog from '../components/layout/SettingsDialog';
 import { useTaskStore } from '../stores/taskStore';
 import { getAccomplish } from '../lib/accomplish';
-import { springs, staggerContainer, staggerItem } from '../lib/animations';
-import { Card, CardContent } from '@/components/ui/card';
-import { ChevronDown } from 'lucide-react';
+import { springs } from '../lib/animations';
+import { Button } from '@/components/ui/button';
 import { hasAnyReadyProvider } from '@accomplish/shared';
+import { PanelSection } from '../components/layout/RightPanel';
 
-// Import use case images for proper bundling in production
-import calendarPrepNotesImg from '/assets/usecases/calendar-prep-notes.png';
-import inboxPromoCleanupImg from '/assets/usecases/inbox-promo-cleanup.png';
-import competitorPricingDeckImg from '/assets/usecases/competitor-pricing-deck.png';
-import notionApiAuditImg from '/assets/usecases/notion-api-audit.png';
-import stagingVsProdVisualImg from '/assets/usecases/staging-vs-prod-visual.png';
-import prodBrokenLinksImg from '/assets/usecases/prod-broken-links.png';
-import stockPortfolioAlertsImg from '/assets/usecases/stock-portfolio-alerts.png';
-import jobApplicationAutomationImg from '/assets/usecases/job-application-automation.png';
-import eventCalendarBuilderImg from '/assets/usecases/event-calendar-builder.png';
+// Cowork logo component - orange/coral starburst
+const CoworkLogo = () => (
+  <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M24 4L26.5 18L41 10L30 21.5L44 24L30 26.5L41 38L26.5 30L24 44L21.5 30L7 38L18 26.5L4 24L18 21.5L7 10L21.5 18L24 4Z" fill="#E07B54" />
+  </svg>
+);
 
-const USE_CASE_EXAMPLES = [
+// Quick task definitions - Chinese
+const QUICK_TASKS = [
   {
-    title: 'Calendar Prep Notes',
-    description: 'Review tomorrow\'s meetings and draft a prep notes doc.',
-    prompt: 'Check my Google Calendar for tomorrow\'s meetings and draft preparation notes in a new Google Doc.',
-    image: calendarPrepNotesImg,
+    id: 'create-file',
+    title: '创建文件',
+    icon: FileText,
+    prompt: '帮我创建一个新文件。你想创建什么类型的文件？',
   },
   {
-    title: 'Inbox Promo Cleanup',
-    description: 'Clear promotional emails from the last 24 hours.',
-    prompt: 'Go to my Gmail inbox and delete all promotional emails from the last 24 hours.',
-    image: inboxPromoCleanupImg,
+    id: 'crunch-data',
+    title: '处理数据',
+    icon: BarChart3,
+    prompt: '帮我分析和处理一些数据。你想处理什么数据？',
   },
   {
-    title: 'Competitor Pricing Deck',
-    description: 'Analyze competitor pricing and draft a slide with recommendations.',
-    prompt: 'Pull pricing and features from these 5 competitor sites [list URLs], save to a CSV, analyze our pricing gaps, and draft a recommendation slide in Google Slides for Monday\'s meeting.',
-    image: competitorPricingDeckImg,
+    id: 'make-prototype',
+    title: '制作原型',
+    icon: Palette,
+    prompt: '帮我创建一个原型。你想创建什么类型的原型？',
   },
   {
-    title: 'Notion API Audit',
-    description: 'Scan a Notion wiki for old API mentions with direct links.',
-    prompt: 'Read through this Notion wiki at [URL] and find all mentions of the old API, listing them with page links.',
-    image: notionApiAuditImg,
+    id: 'organize-files',
+    title: '整理文件',
+    icon: FolderOpen,
+    prompt: '整理[文件夹或文件]。请提出任何澄清问题，并分享你将如何处理这项任务的计划。',
   },
   {
-    title: 'Staging vs Prod Visual Check',
-    description: 'Compare staging and production visuals with screenshots.',
-    prompt: 'Compare my staging site at [URL] to production at [URL] and screenshot any visual differences.',
-    image: stagingVsProdVisualImg,
+    id: 'prep-meeting',
+    title: '准备会议',
+    icon: Calendar,
+    prompt: '帮我准备即将到来的会议。你想准备什么会议？',
   },
   {
-    title: 'Production Broken Links',
-    description: 'Check my website for broken links.',
-    prompt: 'Open [URL], click through every link, and report any 404 errors.',
-    image: prodBrokenLinksImg,
-  },
-  {
-    title: 'Portfolio Monitoring',
-    description: 'Watch stock prices, and alert on drops and spikes.',
-    prompt: 'Monitor my stock portfolio on [broker site], alert on price drops and spikes.',
-    image: stockPortfolioAlertsImg,
-  },
-  {
-    title: 'Job Application Automation',
-    description: 'Filter jobs and submit applications with saved profiles.',
-    prompt: 'Find job listings from Indeed for [query], sort by salary, and apply to the top 5 using my profile.',
-    image: jobApplicationAutomationImg,
-  },
-  {
-    title: 'Event Calendar Builder',
-    description: 'Select top events and add them to the calendar.',
-    prompt: 'Scrape event listings from Eventbrite, filter by location, and add top 5 to my calendar.',
-    image: eventCalendarBuilderImg,
+    id: 'draft-message',
+    title: '起草消息',
+    icon: MessageSquare,
+    prompt: '帮我起草一条消息。你想让我写什么类型的消息？',
   },
 ];
 
 export default function HomePage() {
   const [prompt, setPrompt] = useState('');
-  const [showExamples, setShowExamples] = useState(true);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'providers' | 'voice'>('providers');
-  const { startTask, isLoading, addTaskUpdate, setPermissionRequest } = useTaskStore();
+  const { 
+    startTask, 
+    isLoading, 
+    addTaskUpdate, 
+    setPermissionRequest,
+    workingDirectory,
+    setWorkingDirectory,
+  } = useTaskStore();
   const navigate = useNavigate();
   const accomplish = getAccomplish();
 
@@ -105,15 +107,19 @@ export default function HomePage() {
     };
   }, [addTaskUpdate, setPermissionRequest, accomplish]);
 
-  const executeTask = useCallback(async () => {
-    if (!prompt.trim() || isLoading) return;
+  const executeTask = useCallback(async (taskPrompt: string) => {
+    if (!taskPrompt.trim() || isLoading) return;
 
     const taskId = `task_${Date.now()}`;
-    const task = await startTask({ prompt: prompt.trim(), taskId });
+    const task = await startTask({ 
+      prompt: taskPrompt.trim(), 
+      taskId,
+      workingDirectory: workingDirectory || undefined,
+    });
     if (task) {
       navigate(`/execution/${task.id}`);
     }
-  }, [prompt, isLoading, startTask, navigate]);
+  }, [isLoading, startTask, navigate, workingDirectory]);
 
   const handleSubmit = async () => {
     if (!prompt.trim() || isLoading) return;
@@ -129,12 +135,15 @@ export default function HomePage() {
       }
     }
 
-    await executeTask();
+    await executeTask(prompt);
+  };
+
+  const handleQuickTaskClick = (taskPrompt: string) => {
+    setPrompt(taskPrompt);
   };
 
   const handleSettingsDialogChange = (open: boolean) => {
     setShowSettingsDialog(open);
-    // Reset to providers tab when dialog closes
     if (!open) {
       setSettingsInitialTab('providers');
     }
@@ -146,15 +155,10 @@ export default function HomePage() {
   }, []);
 
   const handleApiKeySaved = async () => {
-    // API key was saved - close dialog and execute the task
     setShowSettingsDialog(false);
     if (prompt.trim()) {
-      await executeTask();
+      await executeTask(prompt);
     }
-  };
-
-  const handleExampleClick = (examplePrompt: string) => {
-    setPrompt(examplePrompt);
   };
 
   return (
@@ -165,115 +169,185 @@ export default function HomePage() {
         onApiKeySaved={handleApiKeySaved}
         initialTab={settingsInitialTab}
       />
-      <div
-        className="h-full flex items-center justify-center p-6 overflow-y-auto bg-accent"
-      >
-      <div className="w-full max-w-2xl flex flex-col items-center gap-8">
-        {/* Main Title */}
-        <motion.h1
-          data-testid="home-title"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={springs.gentle}
-          className="text-4xl font-light tracking-tight text-foreground"
-        >
-          What will you accomplish today?
-        </motion.h1>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ ...springs.gentle, delay: 0.1 }}
-          className="w-full"
-        >
-          <Card className="w-full bg-card/95 backdrop-blur-md shadow-xl gap-0 py-0 flex flex-col max-h-[calc(100vh-3rem)]">
-            <CardContent className="p-6 pb-4 flex-shrink-0">
-              {/* Input Section */}
-              <TaskInputBar
-                value={prompt}
-                onChange={setPrompt}
-                onSubmit={handleSubmit}
-                isLoading={isLoading}
-                placeholder="Describe a task and let AI handle the rest"
-                large={true}
-                autoFocus={true}
-                onOpenSpeechSettings={handleOpenSpeechSettings}
-              />
-            </CardContent>
-
-            {/* Examples Toggle */}
-            <div className="border-t border-border">
-              <button
-                onClick={() => setShowExamples(!showExamples)}
-                className="w-full px-6 py-3 flex items-center justify-between text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors duration-200"
+      
+      <div className="h-full flex bg-[var(--cowork-bg)]">
+        {/* Main content area */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto px-8 pt-16 pb-32">
+            <div className="max-w-2xl mx-auto">
+              {/* Logo and Title */}
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={springs.gentle}
+                className="mb-8"
               >
-                <span>Example prompts</span>
-                <motion.div
-                  animate={{ rotate: showExamples ? 180 : 0 }}
-                  transition={{ duration: 0.2 }}
+                <CoworkLogo />
+                <h1 
+                  data-testid="home-title"
+                  className="mt-4 text-3xl font-serif text-foreground"
+                  style={{ fontFamily: 'Georgia, serif' }}
                 >
-                  <ChevronDown className="h-4 w-4" />
-                </motion.div>
-              </button>
+                  让我们完成待办清单上的任务
+                </h1>
+              </motion.div>
 
-              <AnimatePresence>
-                {showExamples && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden"
-                  >
-                    <div
-                      className="px-6 pt-1 pb-4 overflow-y-auto max-h-[360px]"
-                      style={{
-                        background: 'linear-gradient(to bottom, hsl(var(--muted)) 0%, hsl(var(--background)) 100%)',
-                        backgroundAttachment: 'fixed',
-                      }}
-                    >
-                      <motion.div
-                        variants={staggerContainer}
-                        initial="initial"
-                        animate="animate"
-                        className="grid grid-cols-3 gap-3"
-                      >
-                        {USE_CASE_EXAMPLES.map((example, index) => (
-                          <motion.button
-                            key={index}
-                            data-testid={`home-example-${index}`}
-                            variants={staggerItem}
-                            transition={springs.gentle}
-                            whileHover={{ scale: 1.03, transition: { duration: 0.15 } }}
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => handleExampleClick(example.prompt)}
-                            className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border bg-card hover:border-ring hover:bg-muted/50"
-                          >
-                            <img
-                              src={example.image}
-                              alt={example.title}
-                              className="w-12 h-12 object-cover rounded"
-                            />
-                            <div className="flex flex-col items-center gap-1 w-full">
-                              <div className="font-medium text-xs text-foreground text-center">
-                                {example.title}
-                              </div>
-                              <div className="text-xs text-muted-foreground text-center line-clamp-2">
-                                {example.description}
-                              </div>
-                            </div>
-                          </motion.button>
-                        ))}
-                      </motion.div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {/* Info Banner */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ ...springs.gentle, delay: 0.1 }}
+                className="mb-8 p-4 rounded-xl bg-card border border-border"
+              >
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-muted-foreground">
+                    <p>
+                      Cmb Cowork 是一个早期研究预览版。新的改进会频繁发布。
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Quick Task Cards - 2 rows x 3 columns */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ ...springs.gentle, delay: 0.2 }}
+                className="grid grid-cols-3 gap-3"
+              >
+                {QUICK_TASKS.map((task) => (
+                  <QuickTaskCard
+                    key={task.id}
+                    title={task.title}
+                    icon={task.icon}
+                    onClick={() => handleQuickTaskClick(task.prompt)}
+                  />
+                ))}
+              </motion.div>
             </div>
-          </Card>
-        </motion.div>
+          </div>
+
+          {/* Bottom Input Bar - Fixed */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...springs.gentle, delay: 0.3 }}
+            className="flex-shrink-0 bg-[var(--cowork-bg)] border-t border-border px-8 py-4"
+          >
+            <div className="max-w-2xl mx-auto">
+              {/* Input Container */}
+              <div className="bg-card rounded-xl border border-border shadow-sm">
+                {/* Text Input Area */}
+                <div className="p-4">
+                  <TaskInputBar
+                    value={prompt}
+                    onChange={setPrompt}
+                    onSubmit={handleSubmit}
+                    isLoading={isLoading}
+                    placeholder="今天我能帮你做什么？"
+                    large={false}
+                    autoFocus={true}
+                    onOpenSpeechSettings={handleOpenSpeechSettings}
+                    autoSubmitOnTranscription={false}
+                    hideSubmitButton={true}
+                    minimal={true}
+                  />
+                </div>
+
+                {/* Bottom Actions Bar */}
+                <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                  <div className="flex items-center gap-2">
+                    {/* Folder Selector */}
+                    <FolderSelector onFolderSelect={setWorkingDirectory} />
+                    
+                    {/* Add Attachment Button */}
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Model Selector */}
+                    <ModelSelectorInline />
+                    
+                    {/* Submit Button */}
+                    <Button
+                      onClick={handleSubmit}
+                      disabled={!prompt.trim() || isLoading}
+                      className="gap-2 bg-[var(--cowork-primary)] hover:bg-[var(--cowork-primary)]/90 text-white"
+                    >
+                      开始
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Right Side Panels */}
+        <motion.aside
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={springs.gentle}
+          className="w-[280px] h-full flex-shrink-0 border-l border-border bg-card/50 overflow-y-auto"
+        >
+          <div className="p-4 pt-14 space-y-4">
+            {/* Progress Panel */}
+            <PanelSection title="进度">
+              <div className="flex flex-col items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                    <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                  </div>
+                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                    <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                  </div>
+                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                    <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  查看较长任务的进度。
+                </p>
+              </div>
+            </PanelSection>
+
+            {/* Working Folder Panel */}
+            <PanelSection title="工作文件夹">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
+                  <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                    <Folder className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  查看和打开此任务期间创建的文件。
+                </p>
+              </div>
+            </PanelSection>
+
+            {/* Context Panel */}
+            <PanelSection title="上下文">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
+                  <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center relative">
+                    <FileIcon className="w-5 h-5 text-muted-foreground" />
+                    <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-background border border-border flex items-center justify-center">
+                      <Plus className="w-2.5 h-2.5 text-muted-foreground" />
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  跟踪此任务中使用的工具和引用的文件。
+                </p>
+              </div>
+            </PanelSection>
+          </div>
+        </motion.aside>
       </div>
-    </div>
     </>
   );
 }

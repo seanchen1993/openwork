@@ -25,6 +25,14 @@ interface TaskInputBarProps {
    * Automatically submit after a successful transcription.
    */
   autoSubmitOnTranscription?: boolean;
+  /**
+   * Hide the submit button (when parent handles submission).
+   */
+  hideSubmitButton?: boolean;
+  /**
+   * Minimal style without border/shadow (for embedding).
+   */
+  minimal?: boolean;
 }
 
 export default function TaskInputBar({
@@ -38,6 +46,8 @@ export default function TaskInputBar({
   autoFocus = false,
   onOpenSpeechSettings,
   autoSubmitOnTranscription = true,
+  hideSubmitButton = false,
+  minimal = false,
 }: TaskInputBarProps) {
   const isDisabled = disabled || isLoading;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -127,7 +137,11 @@ export default function TaskInputBar({
       )}
 
       {/* Input container */}
-      <div className="relative flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2.5 shadow-sm transition-all duration-200 ease-accomplish focus-within:border-ring focus-within:ring-1 focus-within:ring-ring">
+      <div className={`relative flex items-center gap-2 ${
+        minimal 
+          ? 'bg-transparent' 
+          : 'rounded-xl border border-border bg-background px-3 py-2.5 shadow-sm transition-all duration-200 ease-accomplish focus-within:border-ring focus-within:ring-1 focus-within:ring-ring'
+      }`}>
         {/* Text input */}
         <textarea
           data-testid="task-input-textarea"
@@ -138,7 +152,7 @@ export default function TaskInputBar({
           placeholder={placeholder}
           disabled={isDisabled || speechInput.isRecording}
           rows={1}
-          className={`max-h-[200px] flex-1 resize-none bg-transparent text-foreground placeholder:text-gray-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${large ? 'text-[20px]' : 'text-sm'}`}
+          className={`max-h-[200px] flex-1 resize-none bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${large ? 'text-[20px]' : 'text-sm'}`}
         />
 
         {/* Speech Input Button */}
@@ -157,28 +171,30 @@ export default function TaskInputBar({
           size="md"
         />
 
-        {/* Submit button */}
-        <button
-          data-testid="task-input-submit"
-          type="button"
-          onClick={() => {
-            accomplish.logEvent({
-              level: 'info',
-              message: 'Task input submit clicked',
-              context: { prompt: value },
-            });
-            onSubmit();
-          }}
-          disabled={!value.trim() || isDisabled || speechInput.isRecording}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-all duration-200 ease-accomplish hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
-          title="Submit"
-        >
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <CornerDownLeft className="h-4 w-4" />
-          )}
-        </button>
+        {/* Submit button - optional */}
+        {!hideSubmitButton && (
+          <button
+            data-testid="task-input-submit"
+            type="button"
+            onClick={() => {
+              accomplish.logEvent({
+                level: 'info',
+                message: 'Task input submit clicked',
+                context: { prompt: value },
+              });
+              onSubmit();
+            }}
+            disabled={!value.trim() || isDisabled || speechInput.isRecording}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-all duration-200 ease-accomplish hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
+            title="Submit"
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <CornerDownLeft className="h-4 w-4" />
+            )}
+          </button>
+        )}
       </div>
     </div>
   );

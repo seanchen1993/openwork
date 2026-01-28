@@ -36,6 +36,8 @@ export interface Task {
   summary?: string;
   status: TaskStatus;
   sessionId?: string;
+  /** Working directory for this task */
+  workingDirectory?: string;
   messages: TaskMessage[];
   createdAt: string;
   startedAt?: string;
