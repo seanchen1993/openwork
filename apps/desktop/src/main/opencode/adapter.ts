@@ -393,13 +393,15 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
     // On Windows, batch files (.cmd) prompt "Terminate batch job (Y/N)?" after Ctrl+C.
     // We need to send "Y" to confirm termination, otherwise the process hangs.
+    // Use a longer delay (250ms) to ensure the prompt appears on all systems.
     if (process.platform === 'win32') {
+      const BATCH_TERMINATION_DELAY = 250;
       setTimeout(() => {
         if (this.ptyProcess) {
           this.ptyProcess.write('Y\n');
           console.log('[OpenCode CLI] Sent Y to confirm batch termination');
         }
-      }, 100);
+      }, BATCH_TERMINATION_DELAY);
     }
   }
 
@@ -980,19 +982,18 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
   /**
    * Build a shell command string with properly escaped arguments.
-   * On Windows, prepends & call operator for paths with spaces.
+   *
+   * On Windows with -EncodedCommand (Base64), we build the command without
+   * the & operator because the encoded command will be executed directly.
+   * The & operator is only needed when passing commands as strings to PowerShell.
    */
   private buildShellCommand(command: string, args: string[]): string {
     const escapedCommand = this.escapeShellArg(command);
     const escapedArgs = args.map(arg => this.escapeShellArg(arg));
 
-    // On Windows, if the command path contains spaces (and is thus quoted),
-    // we need to prepend & call operator so PowerShell executes it as a command
-    // Without &, PowerShell treats "path with spaces" as a string literal
-    if (process.platform === 'win32' && escapedCommand.startsWith('"')) {
-      return ['&', escapedCommand, ...escapedArgs].join(' ');
-    }
-
+    // On Windows, when using -EncodedCommand (Base64), we don't need & operator
+    // The Base64-encoded command will be executed directly by PowerShell
+    // Just join the command and args normally
     return [escapedCommand, ...escapedArgs].join(' ');
   }
 
@@ -1154,23 +1155,43 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
    */
   private getPlatformShell(): string {
     if (process.platform === 'win32') {
-      // Use PowerShell on Windows for better compatibility
-      return 'powershell.exe';
-    } else if (app.isPackaged && process.platform === 'darwin') {
+      // On Windows, try PowerShell first, fall back to CMD
+      // Check if PowerShell exists in common locations
+      const systemRoot = process.env.SYSTEMROOT || 'C:\\Windows';
+      const psPaths = [
+        path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+        path.join(systemRoot, 'SysWOW64', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+      ];
+
+      const psExists = psPaths.some(p => {
+        try {
+          return fs.existsSync(p);
+        } catch {
+          return false;
+        }
+      });
+
+      if (psExists) {
+        return 'powershell.exe';
+      }
+
+      console.warn('[OpenCode CLI] PowerShell not found, falling back to CMD.exe');
+      return 'cmd.exe';
+    }
+    if (app.isPackaged && process.platform === 'darwin') {
       // In packaged macOS apps, use /bin/sh to avoid loading user shell configs
       // (zsh always loads ~/.zshenv, which may trigger TCC permissions)
       return '/bin/sh';
-    } else {
-      // In dev mode, use the user's shell for better compatibility
-      const userShell = process.env.SHELL;
-      if (userShell) {
-        return userShell;
-      }
-      // Fallback chain: bash -> zsh -> sh
-      if (fs.existsSync('/bin/bash')) return '/bin/bash';
-      if (fs.existsSync('/bin/zsh')) return '/bin/zsh';
-      return '/bin/sh';
     }
+    // Linux or dev mode macOS
+    const userShell = process.env.SHELL;
+    if (userShell) {
+      return userShell;
+    }
+    // Fallback chain for Unix-like systems: bash -> zsh -> sh
+    if (fs.existsSync('/bin/bash')) return '/bin/bash';
+    if (fs.existsSync('/bin/zsh')) return '/bin/zsh';
+    return '/bin/sh';
   }
 
   /**

@@ -1,18 +1,23 @@
 /**
- * System PATH utilities for macOS packaged apps
+ * System PATH utilities for packaged apps
  *
  * macOS GUI apps launched from /Applications don't inherit the user's terminal PATH.
- * This module provides utilities to build a proper PATH without loading shell profiles,
- * which avoids triggering macOS folder access permissions (TCC).
+ * Windows GUI apps also don't inherit the full PATH from user environment.
  *
- * We use two approaches:
- * 1. /usr/libexec/path_helper - macOS official utility that reads /etc/paths and /etc/paths.d
- * 2. Common Node.js installation paths - covers NVM, Volta, asdf, Homebrew, etc.
+ * This module provides utilities to build a proper PATH without loading shell profiles,
+ * which avoids triggering macOS folder access permissions (TCC) on macOS and provides
+ * consistent PATH across all platforms.
+ *
+ * Approaches:
+ * - macOS: /usr/libexec/path_helper + common Node.js installation paths
+ * - Windows: Common Node.js installation paths from AppData, Program Files
+ * - Linux: Common Node.js installation paths from /usr, /home
  */
 
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 /**
  * Get NVM Node.js version paths.
@@ -78,7 +83,7 @@ function getFnmNodePaths(): string[] {
  * Common Node.js installation paths on macOS.
  * These are checked in order of preference.
  */
-function getCommonNodePaths(): string[] {
+function getMacOSNodePaths(): string[] {
   const home = process.env.HOME || '';
 
   // Get dynamic paths from version managers
@@ -95,24 +100,121 @@ function getCommonNodePaths(): string[] {
     '/usr/local/bin',                 // Intel Mac
 
     // Version managers (static fallbacks)
-    `${home}/.nvm/current/bin`,       // NVM with 'current' symlink (optional)
-    `${home}/.volta/bin`,             // Volta
-    `${home}/.asdf/shims`,            // asdf
-    `${home}/.fnm/current/bin`,       // fnm current symlink (optional)
-    `${home}/.nodenv/shims`,          // nodenv
+    path.join(home, '.nvm', 'current', 'bin'),       // NVM with 'current' symlink
+    path.join(home, '.volta', 'bin'),                // Volta
+    path.join(home, '.asdf', 'shims'),               // asdf
+    path.join(home, '.fnm', 'current', 'bin'),       // fnm current symlink
+    path.join(home, '.nodenv', 'shims'),             // nodenv
 
     // Less common but valid paths
     '/usr/local/opt/node/bin',        // Homebrew node formula
     '/opt/local/bin',                 // MacPorts
-    `${home}/.local/bin`,             // pip/pipx style installations
+    path.join(home, '.local', 'bin'),              // pip/pipx style installations
   ].filter(p => p && !p.includes('undefined'));
+}
+
+/**
+ * Common Node.js installation paths on Windows.
+ */
+function getWindowsNodePaths(): string[] {
+  const paths: string[] = [];
+  const appData = process.env.APPDATA;
+  const localAppData = process.env.LOCALAPPDATA;
+  const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+  const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+  const home = os.homedir();
+
+  // Node.js installer default paths
+  const addIfExists = (p: string) => {
+    if (fs.existsSync(p) && !paths.includes(p)) {
+      paths.push(p);
+    }
+  };
+
+  // NVM for Windows
+  if (process.env.NVM_HOME) {
+    addIfExists(path.join(process.env.NVM_HOME, 'current'));
+    // Also check directly in NVM_HOME for current node
+    try {
+      const currentSymlink = path.join(process.env.NVM_HOME, 'current');
+      if (fs.existsSync(currentSymlink)) {
+        addIfExists(currentSymlink);
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Volta for Windows
+  addIfExists(path.join(home, 'AppData', 'Local', 'Volta'));
+
+  // npm global paths
+  if (appData) {
+    addIfExists(path.join(appData, 'npm'));
+  }
+  if (localAppData) {
+    addIfExists(path.join(localAppData, 'npm'));
+  }
+
+  // Program Files
+  addIfExists(path.join(programFiles, 'nodejs'));
+  addIfExists(path.join(programFilesX86, 'nodejs'));
+
+  // User profile npm
+  addIfExists(path.join(home, 'AppData', 'Roaming', 'npm'));
+
+  return paths;
+}
+
+/**
+ * Common Node.js installation paths on Linux.
+ */
+function getLinuxNodePaths(): string[] {
+  const home = process.env.HOME || os.homedir();
+  const paths: string[] = [];
+
+  const addIfExists = (p: string) => {
+    if (fs.existsSync(p) && !paths.includes(p)) {
+      paths.push(p);
+    }
+  };
+
+  // Get dynamic paths from version managers
+  const nvmPaths = getNvmNodePaths();
+  const fnmPaths = getFnmNodePaths();
+
+  paths.push(...nvmPaths, ...fnmPaths);
+
+  // Common Linux paths
+  addIfExists('/usr/local/bin');
+  addIfExists('/usr/bin');
+  addIfExists(path.join(home, '.nvm', 'current', 'bin'));
+  addIfExists(path.join(home, '.volta', 'bin'));
+  addIfExists(path.join(home, '.asdf', 'shims'));
+  addIfExists(path.join(home, '.fnm', 'current', 'bin'));
+  addIfExists(path.join(home, '.local', 'bin'));
+
+  return paths;
+}
+
+/**
+ * Get common Node.js installation paths for the current platform.
+ */
+function getCommonNodePaths(): string[] {
+  if (process.platform === 'win32') {
+    return getWindowsNodePaths();
+  } else if (process.platform === 'darwin') {
+    return getMacOSNodePaths();
+  } else {
+    return getLinuxNodePaths();
+  }
 }
 
 /**
  * Get system PATH using macOS path_helper utility.
  * This reads from /etc/paths and /etc/paths.d without loading user shell profiles.
  *
- * @returns The system PATH or null if path_helper fails
+ * @returns The system PATH or null if path_helper fails or not on macOS
  */
 function getSystemPathFromPathHelper(): string | null {
   if (process.platform !== 'darwin') {
@@ -140,35 +242,40 @@ function getSystemPathFromPathHelper(): string | null {
 }
 
 /**
+ * Get the path separator for the current platform.
+ */
+function getPathSeparator(): string {
+  return process.platform === 'win32' ? ';' : ':';
+}
+
+/**
  * Build an extended PATH for finding Node.js tools (node, npm, npx) in packaged apps.
  *
  * This function:
- * 1. Gets the system PATH from path_helper (includes Homebrew if in /etc/paths.d)
- * 2. Prepends common Node.js installation paths
- * 3. Does NOT load user shell profiles (avoids TCC permission prompts)
+ * 1. Gets platform-specific common Node.js installation paths
+ * 2. On macOS: adds system PATH from path_helper
+ * 3. Prepends these to the existing PATH
+ * 4. Does NOT load user shell profiles (avoids TCC permission prompts on macOS)
  *
  * @param basePath - The base PATH to extend (defaults to process.env.PATH)
  * @returns Extended PATH string
  */
 export function getExtendedNodePath(basePath?: string): string {
-  const base = basePath || process.env.PATH || '';
+  // Get base PATH - handle Windows case sensitivity
+  let base = basePath || process.env.PATH || process.env.Path || '';
 
-  if (process.platform !== 'darwin') {
-    // On non-macOS, just return the base PATH
-    return base;
-  }
-
-  // Start with common Node.js paths
+  // Start with common Node.js paths for the platform
   const nodePaths = getCommonNodePaths();
 
-  // Try to get system PATH from path_helper
+  // On macOS, try to get system PATH from path_helper
   const systemPath = getSystemPathFromPathHelper();
 
   // Build the final PATH:
   // 1. Common Node.js paths (highest priority - finds user's preferred Node)
-  // 2. System PATH from path_helper (includes /etc/paths.d entries)
+  // 2. System PATH from path_helper (macOS only, includes /etc/paths.d entries)
   // 3. Base PATH (fallback)
   const pathParts: string[] = [];
+  const separator = getPathSeparator();
 
   // Add common Node.js paths
   for (const p of nodePaths) {
@@ -177,9 +284,9 @@ export function getExtendedNodePath(basePath?: string): string {
     }
   }
 
-  // Add system PATH from path_helper
+  // Add system PATH from path_helper (macOS only)
   if (systemPath) {
-    for (const p of systemPath.split(':')) {
+    for (const p of systemPath.split(separator)) {
       if (p && !pathParts.includes(p)) {
         pathParts.push(p);
       }
@@ -187,37 +294,74 @@ export function getExtendedNodePath(basePath?: string): string {
   }
 
   // Add base PATH entries
-  for (const p of base.split(':')) {
+  for (const p of base.split(separator)) {
     if (p && !pathParts.includes(p)) {
       pathParts.push(p);
     }
   }
 
-  return pathParts.join(':');
+  return pathParts.join(separator);
 }
 
 /**
  * Check if a command exists in the given PATH.
  *
- * @param command - The command to find (e.g., 'npx', 'node')
+ * On Unix-like systems, checks if the file is executable.
+ * On Windows, checks if the file exists with appropriate extensions (.exe, .cmd, .bat).
+ *
+ * @param command - The command to find (e.g., 'npx', 'node', 'npm.cmd')
  * @param searchPath - The PATH to search in
  * @returns The full path to the command if found, null otherwise
  */
 export function findCommandInPath(command: string, searchPath: string): string | null {
-  for (const dir of searchPath.split(':')) {
+  const separator = getPathSeparator();
+
+  for (const dir of searchPath.split(separator)) {
     if (!dir) continue;
 
-    const fullPath = `${dir}/${command}`;
+    const dirPath = dir.trim();
+    if (!dirPath) continue;
+
     try {
-      if (fs.existsSync(fullPath)) {
-        const stats = fs.statSync(fullPath);
-        if (stats.isFile()) {
-          // Check if executable
-          try {
-            fs.accessSync(fullPath, fs.constants.X_OK);
-            return fullPath;
-          } catch {
-            // Not executable, continue searching
+      if (!fs.existsSync(dirPath)) continue;
+
+      // On Windows, try with common executable extensions
+      if (process.platform === 'win32') {
+        // Check if command already has an extension
+        if (path.extname(command)) {
+          const fullPath = path.join(dirPath, command);
+          if (fs.existsSync(fullPath)) {
+            const stats = fs.statSync(fullPath);
+            if (stats.isFile()) {
+              return fullPath;
+            }
+          }
+        } else {
+          // Try common Windows executable extensions
+          const extensions = ['.exe', '.cmd', '.bat', '.ps1'];
+          for (const ext of extensions) {
+            const fullPath = path.join(dirPath, command + ext);
+            if (fs.existsSync(fullPath)) {
+              const stats = fs.statSync(fullPath);
+              if (stats.isFile()) {
+                return fullPath;
+              }
+            }
+          }
+        }
+      } else {
+        // Unix-like systems
+        const fullPath = path.join(dirPath, command);
+        if (fs.existsSync(fullPath)) {
+          const stats = fs.statSync(fullPath);
+          if (stats.isFile()) {
+            // Check if executable (X_OK doesn't work on Windows)
+            try {
+              fs.accessSync(fullPath, fs.constants.X_OK);
+              return fullPath;
+            } catch {
+              // Not executable, continue searching
+            }
           }
         }
       }

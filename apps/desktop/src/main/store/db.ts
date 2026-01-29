@@ -13,7 +13,16 @@ let _db: Database.Database | null = null;
  */
 export function getDatabasePath(): string {
   const dbName = app.isPackaged ? 'openwork.db' : 'openwork-dev.db';
-  return path.join(app.getPath('userData'), dbName);
+  const dbPath = path.join(app.getPath('userData'), dbName);
+
+  // On Windows, warn if path is approaching MAX_PATH limit (260 characters)
+  // This gives users time to address the issue before problems occur
+  if (process.platform === 'win32' && dbPath.length > 250) {
+    console.warn('[DB] Database path is very long, may cause issues on Windows:', dbPath);
+    console.warn('[DB] Consider moving app data to a shorter path or using username alias');
+  }
+
+  return dbPath;
 }
 
 /**
@@ -26,7 +35,20 @@ export function getDatabase(): Database.Database {
     console.log('[DB] Opening database at:', dbPath);
 
     _db = new Database(dbPath);
-    _db.pragma('journal_mode = WAL');
+
+    // On Windows, configure WAL mode with safer settings to handle file locking
+    if (process.platform === 'win32') {
+      // Set busy timeout for Windows (5 seconds) to handle concurrent access
+      _db.pragma('busy_timeout = 5000');
+      _db.pragma('journal_mode = WAL');
+      // Use NORMAL synchronous mode for better Windows performance while maintaining safety
+      _db.pragma('synchronous = NORMAL');
+      console.log('[DB] Configured WAL mode for Windows with busy_timeout=5000, synchronous=NORMAL');
+    } else {
+      // Unix/macOS - standard WAL configuration
+      _db.pragma('journal_mode = WAL');
+    }
+
     _db.pragma('foreign_keys = ON');
   }
   return _db;
@@ -59,10 +81,40 @@ export function resetDatabase(): void {
   }
 
   // Also remove WAL and SHM files if they exist
+  // On Windows, these files may be locked by antivirus or other processes
   const walPath = `${dbPath}-wal`;
   const shmPath = `${dbPath}-shm`;
-  if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
-  if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+
+  // Helper function to delete files with retry logic for Windows file locking
+  const deleteWithRetry = (filePath: string, description: string): void => {
+    if (!fs.existsSync(filePath)) return;
+
+    const maxRetries = process.platform === 'win32' ? 5 : 1;
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        fs.unlinkSync(filePath);
+        console.log(`[DB] Deleted ${description}: ${filePath}`);
+        return;
+      } catch (err) {
+        const errorCode = (err as NodeJS.ErrnoException).code;
+        if (i === maxRetries - 1) {
+          console.warn(`[DB] Could not delete ${description} after ${maxRetries} attempts:`, errorCode);
+        } else {
+          // Wait a bit and retry (exponential backoff)
+          const delay = 100 * (i + 1);
+          console.log(`[DB] Retry ${i + 1}/${maxRetries} for ${description} after ${delay}ms`);
+          // Synchronous delay is not ideal, but this is a rare recovery operation
+          const start = Date.now();
+          while (Date.now() - start < delay) {
+            // Busy wait
+          }
+        }
+      }
+    }
+  };
+
+  deleteWithRetry(walPath, 'WAL file');
+  deleteWithRetry(shmPath, 'SHM file');
 }
 
 /**

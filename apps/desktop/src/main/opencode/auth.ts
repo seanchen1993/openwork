@@ -77,8 +77,10 @@ function getPlatformShell(): string {
   if (app.isPackaged && process.platform === 'darwin') {
     return '/bin/sh';
   }
+  // Linux or dev mode macOS
   const userShell = process.env.SHELL;
   if (userShell) return userShell;
+  // Fallback chain for Unix-like systems: bash -> zsh -> sh
   if (fs.existsSync('/bin/bash')) return '/bin/bash';
   if (fs.existsSync('/bin/zsh')) return '/bin/zsh';
   return '/bin/sh';
