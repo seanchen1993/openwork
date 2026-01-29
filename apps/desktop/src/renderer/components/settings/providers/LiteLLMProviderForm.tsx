@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { ConnectedProvider, LiteLLMCredentials } from '@accomplish/shared';
 import {
-  ModelSelector,
   ConnectButton,
   ConnectedControls,
   ProviderFormHeader,
@@ -31,8 +30,9 @@ export function LiteLLMProviderForm({
   onModelChange,
   showModelError,
 }: LiteLLMProviderFormProps) {
-  const [serverUrl, setServerUrl] = useState('http://localhost:4000');
+  const [serverUrl, setServerUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [modelId, setModelId] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,12 +42,31 @@ export function LiteLLMProviderForm({
     setConnecting(true);
     setError(null);
 
+    const trimmedUrl = serverUrl.trim();
+    const trimmedKey = apiKey.trim() || undefined;
+    const trimmedModelId = modelId.trim();
+
+    // Validate required fields
+    if (!trimmedUrl) {
+      setError('Please enter a Server URL');
+      setConnecting(false);
+      return;
+    }
+    if (!trimmedModelId) {
+      setError('Please enter a Model ID');
+      setConnecting(false);
+      return;
+    }
+
     try {
       const accomplish = getAccomplish();
-      const trimmedKey = apiKey.trim() || undefined;
 
-      // Test connection and fetch models
-      const result = await accomplish.testLiteLLMConnection(serverUrl, trimmedKey);
+      // Test connection with the specified model ID
+      const result = await accomplish.testLiteLLMConnection(
+        trimmedUrl,
+        trimmedKey,
+        trimmedModelId
+      );
       if (!result.success) {
         setError(result.error || 'Connection failed');
         setConnecting(false);
@@ -58,11 +77,9 @@ export function LiteLLMProviderForm({
       if (trimmedKey) {
         await accomplish.addApiKey('litellm', trimmedKey);
       } else {
-        // Remove any previously stored key when connecting without one
         await accomplish.removeApiKey('litellm');
       }
 
-      // Map models to the expected format
       const models = result.models?.map(m => ({
         id: m.id,
         name: m.name,
@@ -71,10 +88,10 @@ export function LiteLLMProviderForm({
       const provider: ConnectedProvider = {
         providerId: 'litellm',
         connectionStatus: 'connected',
-        selectedModelId: null,
+        selectedModelId: trimmedModelId,
         credentials: {
           type: 'litellm',
-          serverUrl,
+          serverUrl: trimmedUrl,
           hasApiKey: !!trimmedKey,
           keyPrefix: trimmedKey ? trimmedKey.substring(0, 10) + '...' : undefined,
         } as LiteLLMCredentials,
@@ -83,15 +100,18 @@ export function LiteLLMProviderForm({
       };
 
       onConnect(provider);
+      onModelChange(trimmedModelId);
+
+      // Clear inputs
+      setServerUrl('');
       setApiKey('');
+      setModelId('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Connection failed');
     } finally {
       setConnecting(false);
     }
   };
-
-  const models = connectedProvider?.availableModels || [];
 
   return (
     <div className="rounded-xl border border-border bg-card p-5" data-testid="provider-settings-panel">
@@ -115,8 +135,20 @@ export function LiteLLMProviderForm({
                   type="text"
                   value={serverUrl}
                   onChange={(e) => setServerUrl(e.target.value)}
-                  placeholder="http://localhost:4000"
+                  placeholder="http://your-api.com/v1"
                   data-testid="litellm-server-url"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2.5 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-foreground">Model ID</label>
+                <input
+                  type="text"
+                  value={modelId}
+                  onChange={(e) => setModelId(e.target.value)}
+                  placeholder="e.g., openai/qwen3-coder-30b-a3b-instruct"
+                  data-testid="litellm-model-id"
                   className="w-full rounded-md border border-input bg-background px-3 py-2.5 text-sm"
                 />
               </div>
@@ -166,7 +198,16 @@ export function LiteLLMProviderForm({
                   <label className="mb-2 block text-sm font-medium text-foreground">Server URL</label>
                   <input
                     type="text"
-                    value={(connectedProvider?.credentials as LiteLLMCredentials)?.serverUrl || 'http://localhost:4000'}
+                    value={(connectedProvider?.credentials as LiteLLMCredentials)?.serverUrl || ''}
+                    disabled
+                    className="w-full rounded-md border border-input bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">Model ID</label>
+                  <input
+                    type="text"
+                    value={connectedProvider?.selectedModelId || ''}
                     disabled
                     className="w-full rounded-md border border-input bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground"
                   />
@@ -185,14 +226,6 @@ export function LiteLLMProviderForm({
               </div>
 
               <ConnectedControls onDisconnect={onDisconnect} />
-
-              {/* Model Selector */}
-              <ModelSelector
-                models={models}
-                value={connectedProvider?.selectedModelId || null}
-                onChange={onModelChange}
-                error={showModelError && !connectedProvider?.selectedModelId}
-              />
             </motion.div>
           )}
         </AnimatePresence>

@@ -2,14 +2,7 @@
  * Provider and model configuration types for multi-provider support
  */
 
-import type { ZaiRegion } from './providerSettings';
-
-export const ZAI_ENDPOINTS: Record<ZaiRegion, string> = {
-  china: 'https://open.bigmodel.cn/api/paas/v4',
-  international: 'https://api.z.ai/api/coding/paas/v4',
-};
-
-export type ProviderType = 'anthropic' | 'openai' | 'openrouter' | 'google' | 'xai' | 'ollama' | 'deepseek' | 'moonshot' | 'zai' | 'azure-foundry' | 'custom' | 'bedrock' | 'litellm' | 'minimax' | 'lmstudio';
+export type ProviderType = 'deepseek' | 'litellm';
 
 export interface ProviderConfig {
   id: ProviderType;
@@ -21,10 +14,10 @@ export interface ProviderConfig {
 }
 
 export interface ModelConfig {
-  id: string; // e.g., "claude-sonnet-4-5"
-  displayName: string; // e.g., "Claude Sonnet 4.5"
+  id: string; // e.g., "deepseek-chat"
+  displayName: string; // e.g., "DeepSeek Chat (V3)"
   provider: ProviderType;
-  fullId: string; // e.g., "anthropic/claude-sonnet-4-5"
+  fullId: string; // e.g., "deepseek/deepseek-chat"
   contextWindow?: number;
   maxOutputTokens?: number;
   supportsVision?: boolean;
@@ -32,58 +25,9 @@ export interface ModelConfig {
 
 export interface SelectedModel {
   provider: ProviderType;
-  model: string; // Full ID: "anthropic/claude-sonnet-4-5"
-  baseUrl?: string;  // For Ollama: the server URL, for Azure Foundry: the endpoint URL
-  deploymentName?: string;  // For Azure Foundry: the deployment name
-}
-
-/**
- * Ollama model info from API
- */
-export interface OllamaModelInfo {
-  id: string;        // e.g., "qwen3:latest"
-  displayName: string;
-  size: number;
-}
-
-/**
- * Ollama server configuration
- */
-export interface OllamaConfig {
-  baseUrl: string;
-  enabled: boolean;
-  lastValidated?: number;
-  models?: OllamaModelInfo[];  // Discovered models from Ollama API
-}
-
-/**
-/**
- * Azure Foundry configuration
- */
-export interface AzureFoundryConfig {
-  baseUrl: string;  // Azure Foundry endpoint URL
-  deploymentName: string;  // Deployment name
-  authType: 'api-key' | 'entra-id';  // Authentication type
-  enabled: boolean;
-  lastValidated?: number;
-}
-
-/**
- * OpenRouter model info from API
- */
-export interface OpenRouterModel {
-  id: string;           // e.g., "anthropic/claude-3.5-sonnet"
-  name: string;         // e.g., "Claude 3.5 Sonnet"
-  provider: string;     // e.g., "anthropic" (extracted from id)
-  contextLength: number;
-}
-
-/**
- * OpenRouter configuration
- */
-export interface OpenRouterConfig {
-  models: OpenRouterModel[];
-  lastFetched?: number;
+  model: string; // Full ID: "deepseek/deepseek-chat"
+  baseUrl?: string;  // For LiteLLM: the server URL
+  deploymentName?: string;  // For future use
 }
 
 /**
@@ -107,149 +51,9 @@ export interface LiteLLMConfig {
 }
 
 /**
- * LM Studio model info from API
- */
-export interface LMStudioModel {
-  id: string;                     // e.g., "qwen2.5-7b-instruct"
-  name: string;                   // Display name
-  toolSupport: 'supported' | 'unsupported' | 'unknown'; // Whether model supports function calling
-}
-
-/**
- * LM Studio configuration
- */
-export interface LMStudioConfig {
-  baseUrl: string;      // e.g., "http://localhost:1234"
-  enabled: boolean;
-  lastValidated?: number;
-  models?: LMStudioModel[];
-}
-
-/**
  * Default providers and models
  */
 export const DEFAULT_PROVIDERS: ProviderConfig[] = [
-  {
-    id: 'anthropic',
-    name: 'Anthropic',
-    requiresApiKey: true,
-    apiKeyEnvVar: 'ANTHROPIC_API_KEY',
-    models: [
-      {
-        id: 'claude-haiku-4-5',
-        displayName: 'Claude Haiku 4.5',
-        provider: 'anthropic',
-        fullId: 'anthropic/claude-haiku-4-5',
-        contextWindow: 200000,
-        supportsVision: true,
-      },
-      {
-        id: 'claude-sonnet-4-5',
-        displayName: 'Claude Sonnet 4.5',
-        provider: 'anthropic',
-        fullId: 'anthropic/claude-sonnet-4-5',
-        contextWindow: 200000,
-        supportsVision: true,
-      },
-      {
-        id: 'claude-opus-4-5',
-        displayName: 'Claude Opus 4.5',
-        provider: 'anthropic',
-        fullId: 'anthropic/claude-opus-4-5',
-        contextWindow: 200000,
-        supportsVision: true,
-      },
-    ],
-  },
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    requiresApiKey: true,
-    apiKeyEnvVar: 'OPENAI_API_KEY',
-    models: [
-      {
-        id: 'gpt-5.2',
-        displayName: 'GPT 5.2',
-        provider: 'openai',
-        fullId: 'openai/gpt-5.2',
-        contextWindow: 400000,
-        supportsVision: true,
-      },
-      {
-        id: 'gpt-5.2-codex',
-        displayName: 'GPT 5.2 Codex',
-        provider: 'openai',
-        fullId: 'openai/gpt-5.2-codex',
-        contextWindow: 400000,
-        supportsVision: true,
-      },
-      {
-        id: 'gpt-5.1-codex-max',
-        displayName: 'GPT 5.1 Codex Max',
-        provider: 'openai',
-        fullId: 'openai/gpt-5.1-codex-max',
-        contextWindow: 272000,
-        supportsVision: true,
-      },
-      {
-        id: 'gpt-5.1-codex-mini',
-        displayName: 'GPT 5.1 Codex Mini',
-        provider: 'openai',
-        fullId: 'openai/gpt-5.1-codex-mini',
-        contextWindow: 400000,
-        supportsVision: true,
-      },
-    ],
-  },
-  {
-    id: 'google',
-    name: 'Google AI',
-    requiresApiKey: true,
-    apiKeyEnvVar: 'GOOGLE_GENERATIVE_AI_API_KEY',
-    models: [
-      {
-        id: 'gemini-3-pro-preview',
-        displayName: 'Gemini 3 Pro',
-        provider: 'google',
-        fullId: 'google/gemini-3-pro-preview',
-        contextWindow: 2000000,
-        supportsVision: true,
-      },
-      {
-        id: 'gemini-3-flash-preview',
-        displayName: 'Gemini 3 Flash',
-        provider: 'google',
-        fullId: 'google/gemini-3-flash-preview',
-        contextWindow: 1000000,
-        supportsVision: true,
-      },
-    ],
-  },
-  {
-    id: 'xai',
-    name: 'xAI',
-    requiresApiKey: true,
-    apiKeyEnvVar: 'XAI_API_KEY',
-    baseUrl: 'https://api.x.ai',
-    models: [
-      {
-        id: 'grok-4',
-        displayName: 'Grok 4',
-        provider: 'xai',
-        fullId: 'xai/grok-4',
-        contextWindow: 256000,
-        supportsVision: true,
-      },
-      {
-        id: 'grok-3',
-        displayName: 'Grok 3',
-        provider: 'xai',
-        fullId: 'xai/grok-3',
-        contextWindow: 131000,
-        supportsVision: false,
-      },
-    ],
-  },
   {
     id: 'deepseek',
     name: 'DeepSeek',
@@ -275,119 +79,9 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
       },
     ],
   },
-  {
-    id: 'moonshot',
-    name: 'Moonshot AI',
-    requiresApiKey: true,
-    apiKeyEnvVar: 'MOONSHOT_API_KEY',
-    baseUrl: 'https://api.moonshot.ai/v1',
-    models: [
-      {
-        id: 'kimi-k2.5',
-        displayName: 'Kimi K2.5',
-        provider: 'moonshot',
-        fullId: 'moonshot/kimi-k2.5',
-        contextWindow: 256000,
-        supportsVision: true,
-      },
-      {
-        id: 'kimi-k2-turbo-preview',
-        displayName: 'Kimi K2 Turbo (Preview)',
-        provider: 'moonshot',
-        fullId: 'moonshot/kimi-k2-turbo-preview',
-        contextWindow: 256000,
-      },
-      {
-        id: 'kimi-latest',
-        displayName: 'Kimi Latest',
-        provider: 'moonshot',
-        fullId: 'moonshot/kimi-latest',
-      },
-    ],
-  },
-  {
-    id: 'zai',
-    name: 'Z.AI Coding Plan',
-    requiresApiKey: true,
-    apiKeyEnvVar: 'ZAI_API_KEY',
-    baseUrl: 'https://open.bigmodel.cn',
-    models: [
-      {
-        id: 'glm-4.7-flashx',
-        displayName: 'GLM-4.7 FlashX (Latest)',
-        provider: 'zai',
-        fullId: 'zai/glm-4.7-flashx',
-        contextWindow: 200000,
-        supportsVision: false,
-      },
-      {
-        id: 'glm-4.7',
-        displayName: 'GLM-4.7',
-        provider: 'zai',
-        fullId: 'zai/glm-4.7',
-        contextWindow: 200000,
-        supportsVision: false,
-      },
-      {
-        id: 'glm-4.7-flash',
-        displayName: 'GLM-4.7 Flash',
-        provider: 'zai',
-        fullId: 'zai/glm-4.7-flash',
-        contextWindow: 200000,
-        supportsVision: false,
-      },
-      {
-        id: 'glm-4.6',
-        displayName: 'GLM-4.6',
-        provider: 'zai',
-        fullId: 'zai/glm-4.6',
-        contextWindow: 200000,
-        supportsVision: false,
-      },
-      {
-        id: 'glm-4.5-flash',
-        displayName: 'GLM-4.5 Flash',
-        provider: 'zai',
-        fullId: 'zai/glm-4.5-flash',
-        contextWindow: 128000,
-        supportsVision: false,
-      },
-    ],
-  },
-  {
-    id: 'bedrock',
-    name: 'Amazon Bedrock',
-    requiresApiKey: false, // Uses AWS credentials
-    models: [], // Now fetched dynamically from AWS API
-  },
-  {
-    id: 'minimax',
-    name: 'MiniMax',
-    requiresApiKey: true,
-    apiKeyEnvVar: 'MINIMAX_API_KEY',
-    baseUrl: 'https://api.minimax.io',
-    models: [
-      {
-        id: 'MiniMax-M2',
-        displayName: 'MiniMax-M2',
-        provider: 'minimax',
-        fullId: 'minimax/MiniMax-M2',
-        contextWindow: 196608,
-        supportsVision: false,
-      },
-      {
-        id: 'MiniMax-M2.1',
-        displayName: 'MiniMax-M2.1',
-        provider: 'minimax',
-        fullId: 'minimax/MiniMax-M2.1',
-        contextWindow: 204800,
-        supportsVision: false,
-      },
-    ],
-  },
 ];
 
 export const DEFAULT_MODEL: SelectedModel = {
-  provider: 'anthropic',
-  model: 'anthropic/claude-opus-4-5',
+  provider: 'deepseek',
+  model: 'deepseek/deepseek-chat',
 };

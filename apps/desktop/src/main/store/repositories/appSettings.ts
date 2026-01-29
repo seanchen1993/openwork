@@ -1,6 +1,6 @@
 // apps/desktop/src/main/store/repositories/appSettings.ts
 
-import type { SelectedModel, OllamaConfig, LiteLLMConfig, AzureFoundryConfig, LMStudioConfig } from '@accomplish/shared';
+import type { SelectedModel, LiteLLMConfig } from '@accomplish/shared';
 import { getDatabase } from '../db';
 
 interface AppSettingsRow {
@@ -8,22 +8,14 @@ interface AppSettingsRow {
   debug_mode: number;
   onboarding_complete: number;
   selected_model: string | null;
-  ollama_config: string | null;
   litellm_config: string | null;
-  azure_foundry_config: string | null;
-  lmstudio_config: string | null;
-  openai_base_url: string | null;
 }
 
 interface AppSettings {
   debugMode: boolean;
   onboardingComplete: boolean;
   selectedModel: SelectedModel | null;
-  ollamaConfig: OllamaConfig | null;
   litellmConfig: LiteLLMConfig | null;
-  azureFoundryConfig: AzureFoundryConfig | null;
-  lmstudioConfig: LMStudioConfig | null;
-  openaiBaseUrl: string;
 }
 
 function getRow(): AppSettingsRow {
@@ -68,23 +60,6 @@ export function setSelectedModel(model: SelectedModel): void {
   );
 }
 
-export function getOllamaConfig(): OllamaConfig | null {
-  const row = getRow();
-  if (!row.ollama_config) return null;
-  try {
-    return JSON.parse(row.ollama_config) as OllamaConfig;
-  } catch {
-    return null;
-  }
-}
-
-export function setOllamaConfig(config: OllamaConfig | null): void {
-  const db = getDatabase();
-  db.prepare('UPDATE app_settings SET ollama_config = ? WHERE id = 1').run(
-    config ? JSON.stringify(config) : null
-  );
-}
-
 export function getLiteLLMConfig(): LiteLLMConfig | null {
   const row = getRow();
   if (!row.litellm_config) return null;
@@ -102,56 +77,6 @@ export function setLiteLLMConfig(config: LiteLLMConfig | null): void {
   );
 }
 
-export function getAzureFoundryConfig(): AzureFoundryConfig | null {
-  const row = getRow();
-  if (!row.azure_foundry_config) return null;
-  try {
-    return JSON.parse(row.azure_foundry_config) as AzureFoundryConfig;
-  } catch {
-    return null;
-  }
-}
-
-export function setAzureFoundryConfig(config: AzureFoundryConfig | null): void {
-  const db = getDatabase();
-  db.prepare('UPDATE app_settings SET azure_foundry_config = ? WHERE id = 1').run(
-    config ? JSON.stringify(config) : null
-  );
-}
-
-export function getLMStudioConfig(): LMStudioConfig | null {
-  const row = getRow();
-  if (!row.lmstudio_config) return null;
-  try {
-    return JSON.parse(row.lmstudio_config) as LMStudioConfig;
-  } catch {
-    return null;
-  }
-}
-
-export function setLMStudioConfig(config: LMStudioConfig | null): void {
-  const db = getDatabase();
-  db.prepare('UPDATE app_settings SET lmstudio_config = ? WHERE id = 1').run(
-    config ? JSON.stringify(config) : null
-  );
-}
-
-/**
- * Get OpenAI base URL override (empty string means default).
- */
-export function getOpenAiBaseUrl(): string {
-  const row = getRow();
-  return row.openai_base_url || '';
-}
-
-/**
- * Set OpenAI base URL override (empty string clears override).
- */
-export function setOpenAiBaseUrl(baseUrl: string): void {
-  const db = getDatabase();
-  db.prepare('UPDATE app_settings SET openai_base_url = ? WHERE id = 1').run(baseUrl || '');
-}
-
 function safeParseJson<T>(json: string | null): T | null {
   if (!json) return null;
   try {
@@ -167,11 +92,7 @@ export function getAppSettings(): AppSettings {
     debugMode: row.debug_mode === 1,
     onboardingComplete: row.onboarding_complete === 1,
     selectedModel: safeParseJson<SelectedModel>(row.selected_model),
-    ollamaConfig: safeParseJson<OllamaConfig>(row.ollama_config),
     litellmConfig: safeParseJson<LiteLLMConfig>(row.litellm_config),
-    azureFoundryConfig: safeParseJson<AzureFoundryConfig>(row.azure_foundry_config),
-    lmstudioConfig: safeParseJson<LMStudioConfig>(row.lmstudio_config),
-    openaiBaseUrl: row.openai_base_url || '',
   };
 }
 
@@ -182,11 +103,7 @@ export function clearAppSettings(): void {
       debug_mode = 0,
       onboarding_complete = 0,
       selected_model = NULL,
-      ollama_config = NULL,
-      litellm_config = NULL,
-      azure_foundry_config = NULL,
-      lmstudio_config = NULL,
-      openai_base_url = ''
+      litellm_config = NULL
     WHERE id = 1`
   ).run();
 }

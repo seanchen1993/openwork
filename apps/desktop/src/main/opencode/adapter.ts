@@ -10,13 +10,10 @@ import {
   isOpenCodeBundled,
   getBundledOpenCodeVersion,
 } from './cli-path';
-import { getAllApiKeys, getBedrockCredentials } from '../store/secureStorage';
-// TODO: Remove getAzureFoundryConfig import in v0.4.0 when legacy support is dropped
-import { getSelectedModel, getAzureFoundryConfig, getOpenAiBaseUrl } from '../store/appSettings';
+import { getAllApiKeys } from '../store/secureStorage';
+import { getSelectedModel } from '../store/appSettings';
 import { getActiveProviderModel, getConnectedProvider } from '../store/providerSettings';
-import type { AzureFoundryCredentials } from '@accomplish/shared';
 import { generateOpenCodeConfig, ACCOMPLISH_AGENT_NAME, syncApiKeysToOpenCodeAuth } from './config-generator';
-import { getAzureEntraToken } from './azure-token-manager';
 import { getExtendedNodePath } from '../utils/system-path';
 import { getBundledNodePaths, logBundledNodeInfo, getNpxPath } from '../utils/bundled-node';
 import { getModelDisplayName } from '../utils/model-display';
@@ -222,38 +219,12 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     // This is non-blocking and just logs information
     await this.runNodeDiagnostics();
 
-    // Sync API keys to OpenCode CLI's auth.json (for DeepSeek, Z.AI support)
+    // Sync API keys to OpenCode CLI's auth.json (for DeepSeek support)
     await syncApiKeysToOpenCodeAuth();
-
-    // For Azure Foundry with Entra ID auth, get the token first so we can include it in config
-    let azureFoundryToken: string | undefined;
-    const activeModel = getActiveProviderModel();
-    const selectedModel = activeModel || getSelectedModel();
-    // TODO: Remove legacy azureFoundryConfig check in v0.4.0
-    const azureFoundryConfig = getAzureFoundryConfig();
-
-    // Check if Azure Foundry is configured via new provider settings
-    const azureFoundryProvider = getConnectedProvider('azure-foundry');
-    const azureFoundryCredentials = azureFoundryProvider?.credentials as AzureFoundryCredentials | undefined;
-
-    // Determine auth type from new settings or legacy config
-    const isAzureFoundryEntraId =
-      (selectedModel?.provider === 'azure-foundry' && azureFoundryCredentials?.authMethod === 'entra-id') ||
-      (selectedModel?.provider === 'azure-foundry' && azureFoundryConfig?.authType === 'entra-id');
-
-    if (isAzureFoundryEntraId) {
-      const tokenResult = await getAzureEntraToken();
-      if (!tokenResult.success) {
-        console.error('[OpenCode CLI] Failed to get Azure Entra ID token:', tokenResult.error);
-        throw new Error(tokenResult.error);
-      }
-      azureFoundryToken = tokenResult.token;
-      console.log('[OpenCode CLI] Obtained Azure Entra ID token for config');
-    }
 
     // Generate OpenCode config file with MCP settings and agent
     console.log('[OpenCode CLI] Generating OpenCode config with MCP settings and agent...');
-    const configPath = await generateOpenCodeConfig(azureFoundryToken);
+    const configPath = await generateOpenCodeConfig();
     console.log('[OpenCode CLI] Config generated at:', configPath);
 
     const cliArgs = await this.buildCliArgs(config);
@@ -646,85 +617,18 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     // Load all API keys
     const apiKeys = await getAllApiKeys();
 
-    if (apiKeys.anthropic) {
-      env.ANTHROPIC_API_KEY = apiKeys.anthropic;
-      console.log('[OpenCode CLI] Using Anthropic API key from settings');
-    }
-    const configuredOpenAiBaseUrl = getOpenAiBaseUrl().trim();
-    if (apiKeys.openai) {
-      env.OPENAI_API_KEY = apiKeys.openai;
-      console.log('[OpenCode CLI] Using OpenAI API key from settings');
-
-      if (configuredOpenAiBaseUrl) {
-        env.OPENAI_BASE_URL = configuredOpenAiBaseUrl;
-        console.log('[OpenCode CLI] Using OPENAI_BASE_URL override from settings');
-      }
-    }
-    if (apiKeys.google) {
-      env.GOOGLE_GENERATIVE_AI_API_KEY = apiKeys.google;
-      console.log('[OpenCode CLI] Using Google API key from settings');
-    }
-    if (apiKeys.xai) {
-      env.XAI_API_KEY = apiKeys.xai;
-      console.log('[OpenCode CLI] Using xAI API key from settings');
-    }
     if (apiKeys.deepseek) {
       env.DEEPSEEK_API_KEY = apiKeys.deepseek;
       console.log('[OpenCode CLI] Using DeepSeek API key from settings');
-    }
-    if (apiKeys.moonshot) {
-      env.MOONSHOT_API_KEY = apiKeys.moonshot;
-      console.log('[OpenCode CLI] Using Moonshot API key from settings');
-    }
-    if (apiKeys.zai) {
-      env.ZAI_API_KEY = apiKeys.zai;
-      console.log('[OpenCode CLI] Using Z.AI API key from settings');
-    }
-    if (apiKeys.openrouter) {
-      env.OPENROUTER_API_KEY = apiKeys.openrouter;
-      console.log('[OpenCode CLI] Using OpenRouter API key from settings');
     }
     if (apiKeys.litellm) {
       env.LITELLM_API_KEY = apiKeys.litellm;
       console.log('[OpenCode CLI] Using LiteLLM API key from settings');
     }
-    if (apiKeys.minimax) {
-      env.MINIMAX_API_KEY = apiKeys.minimax;
-      console.log('[OpenCode CLI] Using MiniMax API key from settings');
-    }
-
-    // Set Bedrock credentials if configured
-    const bedrockCredentials = getBedrockCredentials();
-    if (bedrockCredentials) {
-      if (bedrockCredentials.authType === 'accessKeys') {
-        env.AWS_ACCESS_KEY_ID = bedrockCredentials.accessKeyId;
-        env.AWS_SECRET_ACCESS_KEY = bedrockCredentials.secretAccessKey;
-        if (bedrockCredentials.sessionToken) {
-          env.AWS_SESSION_TOKEN = bedrockCredentials.sessionToken;
-        }
-        console.log('[OpenCode CLI] Using Bedrock Access Key credentials');
-      } else if (bedrockCredentials.authType === 'profile') {
-        env.AWS_PROFILE = bedrockCredentials.profileName;
-        console.log('[OpenCode CLI] Using Bedrock AWS Profile:', bedrockCredentials.profileName);
-      }
-      if (bedrockCredentials.region) {
-        env.AWS_REGION = bedrockCredentials.region;
-        console.log('[OpenCode CLI] Using Bedrock region:', bedrockCredentials.region);
-      }
-    }
-
-    // Set Ollama host if configured (check new settings first, then legacy)
-    const activeModel = getActiveProviderModel();
-    const selectedModel = getSelectedModel();
-    if (activeModel?.provider === 'ollama' && activeModel.baseUrl) {
-      env.OLLAMA_HOST = activeModel.baseUrl;
-      console.log('[OpenCode CLI] Using Ollama host from provider settings:', activeModel.baseUrl);
-    } else if (selectedModel?.provider === 'ollama' && selectedModel.baseUrl) {
-      env.OLLAMA_HOST = selectedModel.baseUrl;
-      console.log('[OpenCode CLI] Using Ollama host from legacy settings:', selectedModel.baseUrl);
-    }
 
     // Set LiteLLM base URL if configured (for debugging/logging purposes)
+    const activeModel = getActiveProviderModel();
+    const selectedModel = getSelectedModel();
     if (activeModel?.provider === 'litellm' && activeModel.baseUrl) {
       console.log('[OpenCode CLI] LiteLLM active with base URL:', activeModel.baseUrl);
     }
@@ -764,22 +668,10 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
     // Add model selection if specified
     if (selectedModel?.model) {
-      if (selectedModel.provider === 'zai') {
-        // Z.AI Coding Plan uses 'zai-coding-plan' provider in OpenCode CLI
-        const modelId = selectedModel.model.split('/').pop();
-        args.push('--model', `zai-coding-plan/${modelId}`);
-      } else if (selectedModel.provider === 'deepseek') {
+      if (selectedModel.provider === 'deepseek') {
         // DeepSeek uses 'deepseek' provider in OpenCode CLI
         const modelId = selectedModel.model.split('/').pop();
         args.push('--model', `deepseek/${modelId}`);
-      } else if (selectedModel.provider === 'openrouter') {
-        // OpenRouter models use format: openrouter/provider/model
-        // The fullId is already in the correct format (e.g., openrouter/anthropic/claude-opus-4-5)
-        args.push('--model', selectedModel.model);
-      } else if (selectedModel.provider === 'ollama') {
-        // Ollama models use format: ollama/model-name
-        const modelId = selectedModel.model.replace(/^ollama\//, '');
-        args.push('--model', `ollama/${modelId}`);
       } else if (selectedModel.provider === 'litellm') {
         // LiteLLM models use format: litellm/model-name
         const modelId = selectedModel.model.replace(/^litellm\//, '');

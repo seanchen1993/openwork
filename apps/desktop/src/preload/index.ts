@@ -48,7 +48,7 @@ const accomplishAPI = {
   // Settings
   getApiKeys: (): Promise<unknown[]> => ipcRenderer.invoke('settings:api-keys'),
   addApiKey: (
-    provider: 'anthropic' | 'openai' | 'openrouter' | 'google' | 'xai' | 'deepseek' | 'moonshot' | 'zai' | 'azure-foundry' | 'custom' | 'bedrock' | 'litellm' | 'lmstudio' | 'elevenlabs',
+    provider: 'deepseek' | 'litellm' | 'elevenlabs',
     key: string,
     label?: string
   ): Promise<unknown> =>
@@ -61,16 +61,12 @@ const accomplishAPI = {
     ipcRenderer.invoke('settings:set-debug-mode', enabled),
   getAppSettings: (): Promise<{ debugMode: boolean; onboardingComplete: boolean }> =>
     ipcRenderer.invoke('settings:app-settings'),
-  getOpenAiBaseUrl: (): Promise<string> =>
-    ipcRenderer.invoke('settings:openai-base-url:get'),
-  setOpenAiBaseUrl: (baseUrl: string): Promise<void> =>
-    ipcRenderer.invoke('settings:openai-base-url:set', baseUrl),
-  getOpenAiOauthStatus: (): Promise<{ connected: boolean; expires?: number }> =>
-    ipcRenderer.invoke('opencode:auth:openai:status'),
-  loginOpenAiWithChatGpt: (): Promise<{ ok: boolean; openedUrl?: string }> =>
-    ipcRenderer.invoke('opencode:auth:openai:login'),
+  getLiteLLMConfig: (): Promise<{ baseUrl: string; enabled: boolean; lastValidated?: number; models?: Array<{ id: string; name: string; provider: string; contextLength: number }> } | null> =>
+    ipcRenderer.invoke('settings:litellm:get-config'),
+  setLiteLLMConfig: (config: { baseUrl: string; enabled: boolean; lastValidated?: number; models?: Array<{ id: string; name: string; provider: string; contextLength: number }> } | null): Promise<void> =>
+    ipcRenderer.invoke('settings:litellm:set-config', config),
 
-  // API Key management (new simplified handlers)
+  // API Key management
   hasApiKey: (): Promise<boolean> =>
     ipcRenderer.invoke('api-key:exists'),
   setApiKey: (key: string): Promise<void> =>
@@ -111,96 +107,18 @@ const accomplishAPI = {
   hasAnyApiKey: (): Promise<boolean> =>
     ipcRenderer.invoke('api-keys:has-any'),
 
-  // Ollama configuration
-  testOllamaConnection: (url: string): Promise<{
-    success: boolean;
-    models?: Array<{ id: string; displayName: string; size: number; toolSupport?: 'supported' | 'unsupported' | 'unknown' }>;
-    error?: string;
-  }> => ipcRenderer.invoke('ollama:test-connection', url),
-
-  getOllamaConfig: (): Promise<{ baseUrl: string; enabled: boolean; lastValidated?: number; models?: Array<{ id: string; displayName: string; size: number; toolSupport?: 'supported' | 'unsupported' | 'unknown' }> } | null> =>
-    ipcRenderer.invoke('ollama:get-config'),
-
-  setOllamaConfig: (config: { baseUrl: string; enabled: boolean; lastValidated?: number; models?: Array<{ id: string; displayName: string; size: number; toolSupport?: 'supported' | 'unsupported' | 'unknown' }> } | null): Promise<void> =>
-    ipcRenderer.invoke('ollama:set-config', config),
-
-  // Azure Foundry configuration
-  getAzureFoundryConfig: (): Promise<{ baseUrl: string; deploymentName: string; authType: 'api-key' | 'entra-id'; enabled: boolean; lastValidated?: number } | null> =>
-    ipcRenderer.invoke('azure-foundry:get-config'),
-
-  setAzureFoundryConfig: (config: { baseUrl: string; deploymentName: string; authType: 'api-key' | 'entra-id'; enabled: boolean; lastValidated?: number } | null): Promise<void> =>
-    ipcRenderer.invoke('azure-foundry:set-config', config),
-
-  testAzureFoundryConnection: (config: { endpoint: string; deploymentName: string; authType: 'api-key' | 'entra-id'; apiKey?: string }): Promise<{
-    success: boolean;
-    error?: string;
-  }> => ipcRenderer.invoke('azure-foundry:test-connection', config),
-
-  saveAzureFoundryConfig: (config: { endpoint: string; deploymentName: string; authType: 'api-key' | 'entra-id'; apiKey?: string }): Promise<void> =>
-    ipcRenderer.invoke('azure-foundry:save-config', config),
-
-  // OpenRouter configuration
-  fetchOpenRouterModels: (): Promise<{
-    success: boolean;
-    models?: Array<{ id: string; name: string; provider: string; contextLength: number }>;
-    error?: string;
-  }> => ipcRenderer.invoke('openrouter:fetch-models'),
-
   // LiteLLM configuration
-  testLiteLLMConnection: (url: string, apiKey?: string): Promise<{
+  testLiteLLMConnection: (url: string, apiKey?: string, manualModelId?: string): Promise<{
     success: boolean;
     models?: Array<{ id: string; name: string; provider: string; contextLength: number }>;
     error?: string;
-  }> => ipcRenderer.invoke('litellm:test-connection', url, apiKey),
+  }> => ipcRenderer.invoke('litellm:test-connection', url, apiKey, manualModelId),
 
   fetchLiteLLMModels: (): Promise<{
     success: boolean;
     models?: Array<{ id: string; name: string; provider: string; contextLength: number }>;
     error?: string;
   }> => ipcRenderer.invoke('litellm:fetch-models'),
-
-  getLiteLLMConfig: (): Promise<{ baseUrl: string; enabled: boolean; lastValidated?: number; models?: Array<{ id: string; name: string; provider: string; contextLength: number }> } | null> =>
-    ipcRenderer.invoke('litellm:get-config'),
-
-  setLiteLLMConfig: (config: { baseUrl: string; enabled: boolean; lastValidated?: number; models?: Array<{ id: string; name: string; provider: string; contextLength: number }> } | null): Promise<void> =>
-    ipcRenderer.invoke('litellm:set-config', config),
-
-  // LM Studio configuration
-  testLMStudioConnection: (url: string): Promise<{
-    success: boolean;
-    models?: Array<{ id: string; name: string; toolSupport: 'supported' | 'unsupported' | 'unknown' }>;
-    error?: string;
-  }> => ipcRenderer.invoke('lmstudio:test-connection', url),
-
-  fetchLMStudioModels: (): Promise<{
-    success: boolean;
-    models?: Array<{ id: string; name: string; toolSupport: 'supported' | 'unsupported' | 'unknown' }>;
-    error?: string;
-  }> => ipcRenderer.invoke('lmstudio:fetch-models'),
-
-  getLMStudioConfig: (): Promise<{
-    baseUrl: string;
-    enabled: boolean;
-    lastValidated?: number;
-    models?: Array<{ id: string; name: string; toolSupport: 'supported' | 'unsupported' | 'unknown' }>;
-  } | null> => ipcRenderer.invoke('lmstudio:get-config'),
-
-  setLMStudioConfig: (config: {
-    baseUrl: string;
-    enabled: boolean;
-    lastValidated?: number;
-    models?: Array<{ id: string; name: string; toolSupport: 'supported' | 'unsupported' | 'unknown' }>;
-  } | null): Promise<void> => ipcRenderer.invoke('lmstudio:set-config', config),
-
-  // Bedrock
-  validateBedrockCredentials: (credentials: string) =>
-    ipcRenderer.invoke('bedrock:validate', credentials),
-  saveBedrockCredentials: (credentials: string) =>
-    ipcRenderer.invoke('bedrock:save', credentials),
-  getBedrockCredentials: () =>
-    ipcRenderer.invoke('bedrock:get-credentials'),
-  fetchBedrockModels: (credentials: string): Promise<{ success: boolean; models: Array<{ id: string; name: string; provider: string }>; error?: string }> =>
-    ipcRenderer.invoke('bedrock:fetch-models', credentials),
 
   // E2E Testing
   isE2EMode: (): Promise<boolean> =>

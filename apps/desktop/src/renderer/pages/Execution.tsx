@@ -234,7 +234,6 @@ export default function ExecutionPage() {
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [customResponse, setCustomResponse] = useState('');
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<'providers' | 'voice'>('providers');
   const [pendingFollowUp, setPendingFollowUp] = useState<string | null>(null);
   const pendingSpeechFollowUpRef = useRef<string | null>(null);
 
@@ -454,7 +453,6 @@ export default function ExecutionPage() {
       if (!hasAnyReadyProvider(settings)) {
         // Store the pending message and open settings dialog
         setPendingFollowUp(followUp);
-        setSettingsInitialTab('providers');
         setShowSettingsDialog(true);
         return;
       }
@@ -468,7 +466,6 @@ export default function ExecutionPage() {
     setShowSettingsDialog(open);
     if (!open) {
       setPendingFollowUp(null);
-      setSettingsInitialTab('providers');
     }
   };
 
@@ -490,7 +487,6 @@ export default function ExecutionPage() {
       if (!hasAnyReadyProvider(settings)) {
         // Store the pending message and open settings dialog
         setPendingFollowUp('continue');
-        setSettingsInitialTab('providers');
         setShowSettingsDialog(true);
         return;
       }
@@ -501,7 +497,6 @@ export default function ExecutionPage() {
   };
 
   const handleOpenSpeechSettings = useCallback(() => {
-    setSettingsInitialTab('voice');
     setShowSettingsDialog(true);
   }, []);
 
@@ -652,7 +647,6 @@ export default function ExecutionPage() {
         open={showSettingsDialog}
         onOpenChange={handleSettingsDialogClose}
         onApiKeySaved={handleApiKeySaved}
-        initialTab={settingsInitialTab}
       />
 
     <div className="h-full flex flex-col bg-[var(--cowork-bg)] relative">

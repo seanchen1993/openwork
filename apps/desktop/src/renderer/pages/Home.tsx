@@ -96,11 +96,10 @@ const NON_PROGRAMMING_SKILLS = [
 export default function HomePage() {
   const [prompt, setPrompt] = useState('');
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<'providers' | 'voice'>('providers');
-  const { 
-    startTask, 
-    isLoading, 
-    addTaskUpdate, 
+  const {
+    startTask,
+    isLoading,
+    addTaskUpdate,
     setPermissionRequest,
     workingDirectory,
     setWorkingDirectory,
@@ -146,7 +145,6 @@ export default function HomePage() {
     if (!isE2EMode) {
       const settings = await accomplish.getProviderSettings();
       if (!hasAnyReadyProvider(settings)) {
-        setSettingsInitialTab('providers');
         setShowSettingsDialog(true);
         return;
       }
@@ -161,9 +159,6 @@ export default function HomePage() {
 
   const handleSettingsDialogChange = (open: boolean) => {
     setShowSettingsDialog(open);
-    if (!open) {
-      setSettingsInitialTab('providers');
-    }
   };
 
   const handleApiKeySaved = async () => {
@@ -179,7 +174,6 @@ export default function HomePage() {
         open={showSettingsDialog}
         onOpenChange={handleSettingsDialogChange}
         onApiKeySaved={handleApiKeySaved}
-        initialTab={settingsInitialTab}
       />
       
       <div className="h-full flex bg-[var(--cowork-bg)]">

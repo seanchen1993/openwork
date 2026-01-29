@@ -170,9 +170,7 @@ export function getActiveProviderModel(): {
     model: provider.selectedModelId,
   };
 
-  if (provider.credentials.type === 'ollama') {
-    result.baseUrl = provider.credentials.serverUrl;
-  } else if (provider.credentials.type === 'litellm') {
+  if (provider.credentials.type === 'litellm') {
     result.baseUrl = provider.credentials.serverUrl;
   }
 
