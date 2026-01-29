@@ -50,28 +50,50 @@ function downloadFile(url, destPath) {
 
     const file = fs.createWriteStream(destPath);
 
+    // Track if download is complete to avoid cleanup after file is deleted
+    let downloadComplete = false;
+
     // Set timeout to avoid hanging on slow/stalled connections
     const timeout = 120000; // 2 minutes
     const timeoutTimer = setTimeout(() => {
+      if (downloadComplete) return;
       file.close();
-      fs.unlinkSync(destPath);
+      try {
+        if (fs.existsSync(destPath)) {
+          fs.unlinkSync(destPath);
+        }
+      } catch {
+        // Ignore errors if file already deleted
+      }
       reject(new Error(`Download timeout after ${timeout / 1000}s`));
     }, timeout);
 
     https.get(url, (response) => {
-      // Reset timeout on successful connection
+      // Clear connection timeout on successful connection
       clearTimeout(timeoutTimer);
 
       // Handle redirects
       if (response.statusCode === 302 || response.statusCode === 301) {
         file.close();
-        fs.unlinkSync(destPath);
+        try {
+          if (fs.existsSync(destPath)) {
+            fs.unlinkSync(destPath);
+          }
+        } catch {
+          // Ignore errors
+        }
         return downloadFile(response.headers.location, destPath).then(resolve).catch(reject);
       }
 
       if (response.statusCode !== 200) {
         file.close();
-        fs.unlinkSync(destPath);
+        try {
+          if (fs.existsSync(destPath)) {
+            fs.unlinkSync(destPath);
+          }
+        } catch {
+          // Ignore errors
+        }
         reject(new Error(`Failed to download: HTTP ${response.statusCode}`));
         return;
       }
@@ -79,37 +101,81 @@ function downloadFile(url, destPath) {
       const totalSize = parseInt(response.headers['content-length'], 10);
       let downloadedSize = 0;
       let lastPercent = 0;
-      let lastActivityTime = Date.now();
 
-      // Set socket timeout for slow/stalled downloads
-      response.socket.setTimeout(timeout, () => {
-        file.close();
-        fs.unlinkSync(destPath);
-        reject(new Error(`Download socket timeout - no data for ${timeout / 1000}s`));
-      });
+      // Set up socket timeout handler (with reference to clear later)
+      let socketTimeoutTimer = null;
 
+      const resetSocketTimeout = () => {
+        if (socketTimeoutTimer) {
+          clearTimeout(socketTimeoutTimer);
+        }
+        // Only set timeout if socket still exists
+        if (response.socket && !response.socket.destroyed) {
+          socketTimeoutTimer = setTimeout(() => {
+            if (downloadComplete) return;
+            file.destroy();
+            response.destroy();
+            try {
+              if (fs.existsSync(destPath)) {
+                fs.unlinkSync(destPath);
+              }
+            } catch {
+              // Ignore errors
+            }
+            reject(new Error(`Download socket timeout - no data for ${timeout / 1000}s`));
+          }, timeout);
+        }
+      };
+
+      // Reset timeout on data received
       response.on('data', (chunk) => {
         downloadedSize += chunk.length;
-        lastActivityTime = Date.now();
         const percent = Math.floor((downloadedSize / totalSize) * 100);
         if (percent >= lastPercent + 10) {
           process.stdout.write(`  ${percent}%`);
           lastPercent = percent;
         }
+        resetSocketTimeout();
       });
+
+      // Initial timeout start
+      resetSocketTimeout();
 
       response.pipe(file);
 
       file.on('finish', () => {
+        downloadComplete = true;
+        if (socketTimeoutTimer) {
+          clearTimeout(socketTimeoutTimer);
+        }
         file.close();
         console.log(' Done');
         resolve();
       });
+
+      file.on('error', (err) => {
+        if (socketTimeoutTimer) {
+          clearTimeout(socketTimeoutTimer);
+        }
+        if (downloadComplete) return;
+        try {
+          if (fs.existsSync(destPath)) {
+            fs.unlinkSync(destPath);
+          }
+        } catch {
+          // Ignore errors
+        }
+        reject(err);
+      });
     }).on('error', (err) => {
-      clearTimeout(timeoutTimer);
-      file.close();
-      if (fs.existsSync(destPath)) {
-        fs.unlinkSync(destPath);
+      if (downloadComplete) return;
+      try {
+        file.close();
+        if (fs.existsSync(destPath)) {
+          fs.unlinkSync(destPath);
+        }
+      } catch {
+        // Ignore errors
       }
       reject(err);
     });
