@@ -114,10 +114,20 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       },
       onComplete: () => {
         this.hasCompleted = true;
-        this.emit('complete', {
-          status: 'success',
-          sessionId: this.currentSessionId || undefined,
-        });
+        // If task was interrupted by user, emit interrupted status instead of success
+        // This handles the case where completion enforcer completes after user clicks stop
+        if (this.wasInterrupted) {
+          console.log('[CompletionEnforcer] Task was interrupted, emitting interrupted status');
+          this.emit('complete', {
+            status: 'interrupted',
+            sessionId: this.currentSessionId || undefined,
+          });
+        } else {
+          this.emit('complete', {
+            status: 'success',
+            sessionId: this.currentSessionId || undefined,
+          });
+        }
       },
       onDebug: (type: string, message: string, data?: unknown) => {
         this.emit('debug', { type, message, data });
