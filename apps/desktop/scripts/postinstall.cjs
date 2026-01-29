@@ -23,19 +23,28 @@ process.env.OPENWORK_POSTINSTALL_RUNNING = '1';
 
 const isWindows = process.platform === 'win32';
 
-function runCommand(command, description) {
+function runCommand(command, description, extraEnv = {}) {
   console.log(`\n> ${description}...`);
+  console.log(`> Command: ${command}`);
+  console.log(`> Working directory: ${path.join(__dirname, '..')}`);
+  const startTime = Date.now();
   try {
     execSync(command, {
       stdio: 'inherit',
       cwd: path.join(__dirname, '..'),
       shell: true,
+      timeout: 300000, // 5 minutes timeout
       env: {
         ...process.env,
         OPENWORK_POSTINSTALL_RUNNING: '1',
+        ...extraEnv,
       }
     });
+    const endTime = Date.now();
+    console.log(`> Completed: ${description} in ${Math.round((endTime - startTime) / 1000)}s`);
   } catch (error) {
+    const endTime = Date.now();
+    console.log(`> Failed after ${Math.round((endTime - startTime) / 1000)}s`);
     console.error(`Failed: ${description}`);
     process.exit(1);
   }
@@ -55,6 +64,7 @@ if (isWindows) {
   const betterSqlite3Path = findBetterSqlite3();
   if (betterSqlite3Path) {
     console.log(`> Found better-sqlite3 at: ${betterSqlite3Path}`);
+    const prebuildStartTime = Date.now();
     try {
       // Remove existing build to force prebuild-install to run
       const buildPath = path.join(betterSqlite3Path, 'build');
@@ -66,10 +76,15 @@ if (isWindows) {
       execSync(`npx prebuild-install --runtime electron --target ${electronVersion}`, {
         stdio: 'inherit',
         cwd: betterSqlite3Path,
-        shell: true
+        shell: true,
+        timeout: 120000, // 2 minutes timeout
       });
+      const prebuildEndTime = Date.now();
+      console.log(`> better-sqlite3 prebuild install completed in ${Math.round((prebuildEndTime - prebuildStartTime) / 1000)}s`);
       console.log('> better-sqlite3 Electron prebuild installed successfully');
     } catch (error) {
+      const prebuildEndTime = Date.now();
+      console.log(`> better-sqlite3 prebuild install failed after ${Math.round((prebuildEndTime - prebuildStartTime) / 1000)}s`);
       console.error('> Failed to install better-sqlite3 prebuild:', error.message);
       console.error('> The app may not work correctly in packaged mode.');
       // Don't exit - the app might still work in development
@@ -99,7 +114,16 @@ const useBundledSkills = process.env.OPENWORK_BUNDLED_SKILLS === '1' || process.
 
 // Install shared skills runtime dependencies (Playwright) at skills/ root
 if (useBundledSkills) {
-  runCommand('npm --prefix skills install --omit=dev', 'Installing shared skills runtime dependencies');
+  runCommand(
+    'npm --prefix skills install --omit=dev',
+    'Installing shared skills runtime dependencies',
+    {
+      // Skip Playwright browser download to avoid timeouts during install
+      // Browsers will be downloaded on-demand when skills are used
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1',
+      PLAYWRIGHT_BROWSERS_PATH: '0',
+    }
+  );
 }
 
 // Install per-skill dependencies for dev/tsx workflows

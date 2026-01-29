@@ -50,7 +50,18 @@ function downloadFile(url, destPath) {
 
     const file = fs.createWriteStream(destPath);
 
+    // Set timeout to avoid hanging on slow/stalled connections
+    const timeout = 120000; // 2 minutes
+    const timeoutTimer = setTimeout(() => {
+      file.close();
+      fs.unlinkSync(destPath);
+      reject(new Error(`Download timeout after ${timeout / 1000}s`));
+    }, timeout);
+
     https.get(url, (response) => {
+      // Reset timeout on successful connection
+      clearTimeout(timeoutTimer);
+
       // Handle redirects
       if (response.statusCode === 302 || response.statusCode === 301) {
         file.close();
@@ -68,9 +79,18 @@ function downloadFile(url, destPath) {
       const totalSize = parseInt(response.headers['content-length'], 10);
       let downloadedSize = 0;
       let lastPercent = 0;
+      let lastActivityTime = Date.now();
+
+      // Set socket timeout for slow/stalled downloads
+      response.socket.setTimeout(timeout, () => {
+        file.close();
+        fs.unlinkSync(destPath);
+        reject(new Error(`Download socket timeout - no data for ${timeout / 1000}s`));
+      });
 
       response.on('data', (chunk) => {
         downloadedSize += chunk.length;
+        lastActivityTime = Date.now();
         const percent = Math.floor((downloadedSize / totalSize) * 100);
         if (percent >= lastPercent + 10) {
           process.stdout.write(`  ${percent}%`);
@@ -86,8 +106,11 @@ function downloadFile(url, destPath) {
         resolve();
       });
     }).on('error', (err) => {
+      clearTimeout(timeoutTimer);
       file.close();
-      fs.unlinkSync(destPath);
+      if (fs.existsSync(destPath)) {
+        fs.unlinkSync(destPath);
+      }
       reject(err);
     });
   });

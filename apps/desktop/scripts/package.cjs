@@ -43,14 +43,46 @@ try {
   // This avoids issues with node-pty's winpty.gyp batch file handling
   const npmRebuildFlag = isWindows ? ' --config.npmRebuild=false' : '';
 
+  // On CI Windows builds, fully disable signing to avoid hanging signtool prompts
+  const isCi = process.env.CI === 'true';
+  const skipSigningFlag = isWindows && isCi
+    ? ' --config.win.sign=false --config.win.signAndEditExecutable=false'
+    : '';
+
+  // Use dir target on CI Windows to avoid slow NSIS installer building
+  const useWinDirTarget = isWindows && isCi;
+  const winTargetFlag = useWinDirTarget ? ' --config.win.target=dir' : '';
+
   // Use npx to run electron-builder to ensure it's found in node_modules
-  const command = `npx electron-builder ${args}${npmRebuildFlag}`;
+  const command = `npx electron-builder ${args}${npmRebuildFlag}${skipSigningFlag}${winTargetFlag}`;
+
+  const builderEnv = {
+    ...process.env,
+    ...(isWindows && isCi ? { ELECTRON_BUILDER_LOG_LEVEL: 'debug' } : {}),
+  };
 
   console.log('Running:', command);
   if (isWindows) {
     console.log('(Skipping native module rebuild on Windows - using prebuilt binaries)');
+    if (skipSigningFlag) {
+      console.log('(Skipping Windows signing on CI)');
+    }
+    if (winTargetFlag) {
+      console.log('(Using Windows dir target on CI)');
+    }
   }
-  execSync(command, { stdio: 'inherit', cwd: path.join(__dirname, '..') });
+
+  const startTime = Date.now();
+  console.log(`[package] electron-builder start: ${new Date(startTime).toISOString()}`);
+  execSync(command, {
+    stdio: 'inherit',
+    cwd: path.join(__dirname, '..'),
+    env: builderEnv,
+    timeout: 600000, // 10 minutes timeout
+  });
+  const endTime = Date.now();
+  console.log(`[package] electron-builder end: ${new Date(endTime).toISOString()}`);
+  console.log(`[package] electron-builder duration: ${Math.round((endTime - startTime) / 1000)}s`);
 
 } finally {
   // Restore the symlink
