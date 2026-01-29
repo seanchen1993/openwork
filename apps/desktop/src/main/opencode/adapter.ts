@@ -86,6 +86,10 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   private waitingTransitionTimer: ReturnType<typeof setTimeout> | null = null;
   /** Whether the first tool has been received (to stop showing startup stages) */
   private hasReceivedFirstTool: boolean = false;
+  /** Timer for detecting if task is stuck (no output after startup) */
+  private startupTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Whether we've received any data from the PTY process */
+  private hasReceivedAnyData: boolean = false;
 
   /**
    * Create a new OpenCodeAdapter instance
@@ -204,10 +208,16 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.completionEnforcer.reset();
     this.lastWorkingDirectory = config.workingDirectory;
     this.hasReceivedFirstTool = false;
+    this.hasReceivedAnyData = false;
     // Clear any existing waiting transition timer
     if (this.waitingTransitionTimer) {
       clearTimeout(this.waitingTransitionTimer);
       this.waitingTransitionTimer = null;
+    }
+    // Clear any existing startup timeout timer
+    if (this.startupTimeoutTimer) {
+      clearTimeout(this.startupTimeoutTimer);
+      this.startupTimeoutTimer = null;
     }
 
     // Start the log watcher to detect errors that aren't output as JSON
@@ -301,8 +311,35 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       // Emit 'loading' stage after PTY spawn
       this.emit('progress', { stage: 'loading', message: 'Loading agent...' });
 
+      // Set up startup timeout - if no data received within 30 seconds, something is wrong
+      const STARTUP_TIMEOUT_MS = 30000;
+      this.startupTimeoutTimer = setTimeout(() => {
+        if (!this.hasReceivedAnyData && !this.hasCompleted) {
+          console.error('[OpenCode CLI] Startup timeout: No data received from PTY process');
+          this.emit('debug', { type: 'error', message: 'Task failed to start: No response from CLI process. Please check if OpenCode CLI is properly installed.' });
+          // Kill the PTY process
+          if (this.ptyProcess) {
+            try {
+              this.ptyProcess.kill();
+            } catch (e) {
+              console.warn('[OpenCode CLI] Failed to kill PTY process:', e);
+            }
+          }
+          // Emit error event
+          this.emit('error', new Error('Task failed to start: No response from CLI process. Please check if OpenCode CLI is properly installed.'));
+        }
+      }, STARTUP_TIMEOUT_MS);
+
       // Handle PTY data (combines stdout/stderr)
       this.ptyProcess.onData((data: string) => {
+        // Mark that we've received data (clears startup timeout)
+        if (!this.hasReceivedAnyData) {
+          this.hasReceivedAnyData = true;
+          if (this.startupTimeoutTimer) {
+            clearTimeout(this.startupTimeoutTimer);
+            this.startupTimeoutTimer = null;
+          }
+        }
         // Filter out ANSI escape codes and control characters for cleaner parsing
         // Enhanced to handle Windows PowerShell sequences (cursor visibility, window titles)
         const cleanData = data
@@ -467,6 +504,12 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     if (this.waitingTransitionTimer) {
       clearTimeout(this.waitingTransitionTimer);
       this.waitingTransitionTimer = null;
+    }
+
+    // Clear startup timeout timer
+    if (this.startupTimeoutTimer) {
+      clearTimeout(this.startupTimeoutTimer);
+      this.startupTimeoutTimer = null;
     }
 
     // Reset stream parser
