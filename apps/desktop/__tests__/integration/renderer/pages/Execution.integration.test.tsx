@@ -113,6 +113,13 @@ let mockStoreState: {
   setupProgress: string | null;
   setupProgressTaskId: string | null;
   setupDownloadStep: number;
+  // Properties needed by RightPanel and its children
+  todos: unknown[];
+  todosTaskId: string | null;
+  workingDirectory: string | null;
+  recentFolders: string[];
+  authError: { providerId: string; message: string } | null;
+  clearAuthError: () => void;
 } = {
   currentTask: null,
   loadTaskById: mockLoadTaskById,
@@ -130,6 +137,12 @@ let mockStoreState: {
   setupProgress: null,
   setupProgressTaskId: null,
   setupDownloadStep: 1,
+  todos: [],
+  todosTaskId: null,
+  workingDirectory: null,
+  recentFolders: [],
+  authError: null,
+  clearAuthError: vi.fn(),
 };
 
 // Mock the task store
@@ -145,6 +158,9 @@ vi.mock('framer-motion', () => ({
     ),
     button: ({ children, ...props }: { children: React.ReactNode; [key: string]: unknown }) => (
       <button {...props}>{children}</button>
+    ),
+    aside: ({ children, ...props }: { children: React.ReactNode; [key: string]: unknown }) => (
+      <aside {...props}>{children}</aside>
     ),
   },
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -196,6 +212,12 @@ describe('Execution Page Integration', () => {
       setupProgress: null,
       setupProgressTaskId: null,
       setupDownloadStep: 1,
+      todos: [],
+      todosTaskId: null,
+      workingDirectory: null,
+      recentFolders: [],
+      authError: null,
+      clearAuthError: vi.fn(),
     };
   });
 

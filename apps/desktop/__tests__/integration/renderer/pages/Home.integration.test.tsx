@@ -77,6 +77,14 @@ let mockStoreState = {
   isLoading: false,
   addTaskUpdate: mockAddTaskUpdate,
   setPermissionRequest: mockSetPermissionRequest,
+  // Properties needed by FolderSelector and other components
+  workingDirectory: null,
+  recentFolders: [],
+  openLauncher: vi.fn(),
+  authError: null,
+  clearAuthError: vi.fn(),
+  todos: [],
+  todosTaskId: null,
 };
 
 // Mock the task store
@@ -96,25 +104,134 @@ vi.mock('framer-motion', () => ({
     button: ({ children, onClick, ...props }: { children: React.ReactNode; onClick?: () => void; [key: string]: unknown }) => (
       <button onClick={onClick} {...props}>{children}</button>
     ),
+    aside: ({ children, ...props }: { children: React.ReactNode; [key: string]: unknown }) => (
+      <aside {...props}>{children}</aside>
+    ),
   },
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-// Mock SettingsDialog
+// Mock lucide-react icons - simplified without TypeScript types
+vi.mock('lucide-react', () => ({
+  FileText: (props: any) => <svg className={props.className} data-icon="FileText" />,
+  BarChart3: (props: any) => <svg className={props.className} data-icon="BarChart3" />,
+  Palette: (props: any) => <svg className={props.className} data-icon="Palette" />,
+  FolderOpen: (props: any) => <svg className={props.className} data-icon="FolderOpen" />,
+  Calendar: (props: any) => <svg className={props.className} data-icon="Calendar" />,
+  MessageSquare: (props: any) => <svg className={props.className} data-icon="MessageSquare" />,
+  ArrowRight: (props: any) => <svg className={props.className} data-icon="ArrowRight" />,
+  Folder: (props: any) => <svg className={props.className} data-icon="Folder" />,
+  Plus: (props: any) => <svg className={props.className} data-icon="Plus" />,
+  Code: (props: any) => <svg className={props.className} data-icon="Code" />,
+  GitBranch: (props: any) => <svg className={props.className} data-icon="GitBranch" />,
+  Bug: (props: any) => <svg className={props.className} data-icon="Bug" />,
+  Search: (props: any) => <svg className={props.className} data-icon="Search" />,
+  CornerDownLeft: (props: any) => <svg className={props.className} data-icon="CornerDownLeft" />,
+  Loader2: (props: any) => <svg className={props.className} data-icon="Loader2" />,
+  AlertCircle: (props: any) => <svg className={props.className} data-icon="AlertCircle" />,
+  FileIcon: (props: any) => <svg className={props.className} data-icon="FileIcon" />,
+}));
+
+// Mock Button component - simplified
+vi.mock('@/components/ui/button', () => ({
+  Button: (props: any) => (
+    <button
+      onClick={props.onClick}
+      disabled={props.disabled}
+      className={props.className}
+      {...props}
+    >
+      {props.children}
+    </button>
+  ),
+}));
+
+// Mock SettingsDialog - simplified
 vi.mock('@/components/layout/SettingsDialog', () => ({
-  default: ({ open, onOpenChange, onApiKeySaved }: {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    onApiKeySaved?: () => void;
-  }) => (
-    open ? (
+  default: (props: any) =>
+    props.open ? (
       <div data-testid="settings-dialog" role="dialog">
-        <button onClick={() => onOpenChange(false)}>Close</button>
-        {onApiKeySaved && (
-          <button onClick={onApiKeySaved}>Save API Key</button>
+        <button onClick={() => props.onOpenChange(false)}>Close</button>
+        {props.onApiKeySaved && (
+          <button onClick={props.onApiKeySaved}>Save API Key</button>
         )}
       </div>
-    ) : null
+    ) : null,
+}));
+
+// Mock FolderSelector - simplified
+vi.mock('@/components/FolderSelector', () => ({
+  default: (props: any) => (
+    <div data-testid="folder-selector">
+      <button onClick={() => props.onFolderSelect?.('/mock/path')}>Select Folder</button>
+    </div>
+  ),
+}));
+
+// Mock PanelSection from RightPanel - simplified
+vi.mock('@/components/layout/RightPanel', () => ({
+  default: (props: any) =>
+    props.visible ? <div data-testid="right-panel">{props.children}</div> : null,
+  PanelSection: (props: any) => (
+    <div data-testid="panel-section" data-title={props.title}>{props.children}</div>
+  ),
+}));
+
+// Mock TaskInputBar - simplified version
+vi.mock('@/components/landing/TaskInputBar', () => ({
+  default: (props: any) => {
+    return (
+      <div data-testid="task-input-bar" data-minimal={props.minimal} data-hide-submit={props.hideSubmitButton}>
+        <textarea
+          data-testid="task-input"
+          placeholder={props.placeholder || "Describe a task and let AI handle the rest"}
+          value={props.value || ''}
+          onChange={(e: any) => props.onChange?.(e.target.value)}
+          disabled={props.isLoading}
+        />
+        {!props.hideSubmitButton && (
+          <button
+            data-testid="submit-button"
+            title="Submit"
+            onClick={props.onSubmit}
+            disabled={props.isLoading || !props.value?.trim()}
+          >
+            Submit
+          </button>
+        )}
+      </div>
+    );
+  },
+}));
+
+// Mock SpeechInputButton
+vi.mock('@/components/ui/SpeechInputButton', () => ({
+  SpeechInputButton: () => <button data-testid="speech-input-button">🎤</button>,
+}));
+
+// Mock Alert components
+vi.mock('@/components/ui/alert', () => ({
+  Alert: ({ children }: { children: React.ReactNode }) => <div data-testid="alert">{children}</div>,
+  AlertDescription: ({ children }: { children: React.ReactNode }) => <div data-testid="alert-description">{children}</div>,
+}));
+
+// Mock useSpeechInput hook
+vi.mock('@/hooks/useSpeechInput', () => ({
+  useSpeechInput: () => ({
+    isListening: false,
+    startListening: vi.fn(),
+    stopListening: vi.fn(),
+    supported: true,
+  }),
+}));
+
+// Mock QuickTaskCard - simplified
+vi.mock('@/components/landing/QuickTaskCard', () => ({
+  default: (props: any) => (
+    <div data-testid="quick-task-card" data-title={props.title} onClick={props.onClick}>
+      <div>{props.title}</div>
+      {props.description && <div>{props.description}</div>}
+    </div>
   ),
 }));
 
@@ -141,6 +258,14 @@ describe('Home Page Integration', () => {
       isLoading: false,
       addTaskUpdate: mockAddTaskUpdate,
       setPermissionRequest: mockSetPermissionRequest,
+      // Properties needed by FolderSelector and other components
+      workingDirectory: null,
+      recentFolders: [],
+      openLauncher: vi.fn(),
+      authError: null,
+      clearAuthError: vi.fn(),
+      todos: [],
+      todosTaskId: null,
     };
     // Default to having API key (legacy)
     mockHasAnyApiKey.mockResolvedValue(true);

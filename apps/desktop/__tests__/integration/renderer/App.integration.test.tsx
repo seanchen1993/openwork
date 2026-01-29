@@ -80,6 +80,14 @@ vi.mock('framer-motion', () => ({
       const { initial, animate, exit, transition, variants, whileHover, ...domProps } = props;
       return <button className={className} {...domProps}>{children}</button>;
     },
+    h1: ({ children, ...props }: { children: React.ReactNode; [key: string]: unknown }) => {
+      const { initial, animate, exit, transition, variants, ...domProps } = props;
+      return <h1 {...domProps}>{children}</h1>;
+    },
+    aside: ({ children, ...props }: { children: React.ReactNode; [key: string]: unknown }) => {
+      const { initial, animate, exit, transition, variants, ...domProps } = props;
+      return <aside {...domProps}>{children}</aside>;
+    },
   },
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -104,6 +112,9 @@ vi.mock('@/lib/animations', () => ({
 // Mock the task store
 const mockLoadTasks = vi.fn();
 const mockReset = vi.fn();
+const mockOpenLauncher = vi.fn();
+const mockClearAuthError = vi.fn();
+
 let mockStoreState = {
   tasks: [],
   currentTask: null,
@@ -113,6 +124,15 @@ let mockStoreState = {
   loadTaskById: vi.fn(),
   updateTaskStatus: vi.fn(),
   addTaskUpdate: vi.fn(),
+  // Properties needed by RightPanel and its children
+  todos: [],
+  todosTaskId: null,
+  workingDirectory: null,
+  recentFolders: [],
+  // Properties needed by App
+  openLauncher: mockOpenLauncher,
+  authError: null,
+  clearAuthError: mockClearAuthError,
 };
 
 vi.mock('@/stores/taskStore', () => ({
@@ -122,6 +142,60 @@ vi.mock('@/stores/taskStore', () => ({
 // Mock the Sidebar component
 vi.mock('@/components/layout/Sidebar', () => ({
   default: () => <div data-testid="sidebar">Sidebar</div>,
+}));
+
+// Mock RightPanel and its children
+vi.mock('@/components/layout/RightPanel', () => ({
+  default: ({ children, visible }: { children: React.ReactNode; visible?: boolean }) =>
+    visible ? <div data-testid="right-panel">{children}</div> : null,
+}));
+
+vi.mock('@/components/panels/ProgressPanel', () => ({
+  default: ({ todos }: { todos: unknown[] }) => (
+    <div data-testid="progress-panel">Todos: {todos.length}</div>
+  ),
+}));
+
+vi.mock('@/components/panels/WorkingFolderPanel', () => ({
+  default: ({ workingDirectory }: { workingDirectory: string | null }) => (
+    <div data-testid="working-folder-panel">{workingDirectory || 'No folder selected'}</div>
+  ),
+}));
+
+vi.mock('@/components/panels/ContextPanel', () => ({
+  default: ({ messages }: { messages: unknown[] }) => (
+    <div data-testid="context-panel">Messages: {messages.length}</div>
+  ),
+}));
+
+// Mock TaskLauncher
+vi.mock('@/components/TaskLauncher', () => ({
+  TaskLauncher: () => <div data-testid="task-launcher">Task Launcher</div>,
+}));
+
+// Mock AuthErrorToast
+vi.mock('@/components/AuthErrorToast', () => ({
+  AuthErrorToast: ({ error, onReLogin, onDismiss }: {
+    error: { providerId: string } | null;
+    onReLogin: () => void;
+    onDismiss: () => void;
+  }) =>
+    error ? (
+      <div data-testid="auth-error-toast">
+        <button onClick={onReLogin}>Re-login</button>
+        <button onClick={onDismiss}>Dismiss</button>
+      </div>
+    ) : null,
+}));
+
+// Mock SettingsDialog
+vi.mock('@/components/layout/SettingsDialog', () => ({
+  default: ({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) =>
+    open ? (
+      <div data-testid="settings-dialog">
+        <button onClick={() => onOpenChange(false)}>Close</button>
+      </div>
+    ) : null,
 }));
 
 // Mock the HomePage
@@ -150,6 +224,15 @@ describe('App Integration', () => {
       loadTaskById: vi.fn(),
       updateTaskStatus: vi.fn(),
       addTaskUpdate: vi.fn(),
+      // Properties needed by RightPanel and its children
+      todos: [],
+      todosTaskId: null,
+      workingDirectory: null,
+      recentFolders: [],
+      // Properties needed by App
+      openLauncher: mockOpenLauncher,
+      authError: null,
+      clearAuthError: mockClearAuthError,
     };
     mockSetOnboardingComplete.mockResolvedValue(undefined);
   });

@@ -108,6 +108,8 @@ describe('taskStore Integration', () => {
         setupDownloadStep: 1,
         todos: [],
         todosTaskId: null,
+        workingDirectory: null,
+        recentFolders: [],
       });
     } catch {
       // Store may not be loaded
