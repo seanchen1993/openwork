@@ -34,9 +34,19 @@ function isSystemChromeInstalled(): boolean {
     // Check common Windows Chrome locations
     const programFiles = process.env['PROGRAMFILES'] || 'C:\\Program Files';
     const programFilesX86 = process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)';
+    const localAppData = process.env['LOCALAPPDATA'] || path.join(os.homedir(), 'AppData', 'Local');
+
+    // Check Program Files (system-wide install)
+    const programFilesPath = path.join(programFiles, 'Google', 'Chrome', 'Application', 'chrome.exe');
+    const programFilesX86Path = path.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe');
+
+    // Check user directory (common for single-user installs)
+    const userChromePath = path.join(localAppData, 'Google', 'Chrome', 'Application', 'chrome.exe');
+
     return (
-      fs.existsSync(path.join(programFiles, 'Google', 'Chrome', 'Application', 'chrome.exe')) ||
-      fs.existsSync(path.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe'))
+      fs.existsSync(programFilesPath) ||
+      fs.existsSync(programFilesX86Path) ||
+      fs.existsSync(userChromePath)
     );
   }
   // Linux - check common paths
