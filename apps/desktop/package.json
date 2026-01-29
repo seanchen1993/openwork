@@ -148,6 +148,7 @@
         "to": "skills",
         "filter": [
           "**/*",
+          "!**/node_modules/**",
           "!**/profiles/**",
           "!**/tmp/**",
           "!**/.git/**",
