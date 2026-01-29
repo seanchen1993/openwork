@@ -612,6 +612,9 @@ export function registerIPCHandlers(): void {
     // Use existing task ID or create a new one
     const taskId = validatedExistingTaskId || createTaskId();
 
+    // Get existing task to preserve working directory
+    const existingTask = validatedExistingTaskId ? getTask(validatedExistingTaskId) : null;
+
     // Persist the user's follow-up message to task history
     if (validatedExistingTaskId) {
       const userMessage: TaskMessage = {
@@ -730,6 +733,7 @@ export function registerIPCHandlers(): void {
       prompt: validatedPrompt,
       sessionId: validatedSessionId,
       taskId,
+      workingDirectory: existingTask?.workingDirectory,
     }, callbacks);
 
     // Update task status in history (whether running or queued)
