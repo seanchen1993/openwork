@@ -25,7 +25,7 @@ import QuickTaskCard from '../components/landing/QuickTaskCard';
 import FolderSelector from '../components/FolderSelector';
 import SettingsDialog from '../components/layout/SettingsDialog';
 import { useTaskStore } from '../stores/taskStore';
-import { getAccomplish } from '../lib/accomplish';
+import { getAccomplish, getFolderName } from '../lib/accomplish';
 import { springs } from '../lib/animations';
 import { Button } from '@/components/ui/button';
 import { hasAnyReadyProvider } from '@accomplish/shared';
@@ -431,26 +431,26 @@ export default function HomePage() {
                         await accomplish.openPath?.(workingDirectory);
                       }
                     }}
-                    className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-left"
+                    className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-left w-full"
                   >
-                    <div className="w-10 h-10 rounded-lg bg-[var(--cowork-primary)]/10 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-lg bg-[var(--cowork-primary)]/10 flex items-center justify-center flex-shrink-0">
                       <Folder className="w-5 h-5 text-[var(--cowork-primary)]" />
                     </div>
-                    <span className="text-sm font-medium text-foreground truncate">
-                      {workingDirectory.split('/').filter(Boolean).pop() || workingDirectory}
+                    <span className="text-sm font-medium text-foreground truncate flex-1" title={workingDirectory}>
+                      {getFolderName(workingDirectory)}
                     </span>
                   </button>
                 ) : (
                   <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
-                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
                       <AlertCircle className="w-5 h-5 text-muted-foreground" />
                     </div>
                     <span className="text-sm text-muted-foreground">未选择文件夹</span>
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground break-all">
                   {workingDirectory
-                    ? '工作文件夹已设置。点击可在 Finder 中打开。'
+                    ? `工作文件夹已设置。点击可在文件管理器中打开。`
                     : '请选择一个工作文件夹以开始任务。'}
                 </p>
               </div>

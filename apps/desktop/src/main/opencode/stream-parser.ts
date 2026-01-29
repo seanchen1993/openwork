@@ -24,7 +24,8 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
    * Feed raw data from stdout
    */
   feed(chunk: string): void {
-    this.buffer += chunk;
+    // Normalize Windows line endings (\r\n -> \n) to prevent parsing issues
+    this.buffer += chunk.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
     // Parse complete lines first - this extracts all complete JSON messages
     // and leaves only the incomplete tail in the buffer

@@ -193,3 +193,30 @@ export function useAccomplish(): AccomplishAPI {
   }
   return api;
 }
+
+/**
+ * Get the folder name from a path (works on both Windows and Unix)
+ * Handles both forward slashes (/) and backslashes (\)
+ */
+export function getFolderName(path: string): string {
+  // Handle both Windows (\) and Unix (/) path separators
+  const parts = path.split(/[/\\]/).filter(Boolean);
+  return parts[parts.length - 1] || path;
+}
+
+/**
+ * Get the parent directory of a path
+ */
+export function getParentPath(path: string): string {
+  const parts = path.split(/[/\\]/).filter(Boolean);
+  parts.pop();
+  if (parts.length === 0) return path;
+  // Preserve the original separator style
+  const isWindowsPath = path.includes('\\');
+  const separator = isWindowsPath ? '\\' : '/';
+  // Handle drive letters on Windows (e.g., C:\)
+  if (isWindowsPath && parts[0]?.match(/^[A-Za-z]:$/)) {
+    return parts[0] + separator + parts.slice(1).join(separator);
+  }
+  return (path.startsWith('/') ? '/' : '') + parts.join(separator);
+}
