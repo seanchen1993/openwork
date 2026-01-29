@@ -1039,7 +1039,7 @@ export default function ExecutionPage() {
 
                         {/* File path(s) display */}
                         <div className={cn(
-                          "mb-4 p-3 rounded-lg",
+                          "mb-4 p-3 rounded-lg max-h-[200px] overflow-y-auto",
                           isDeleteOperation(permissionRequest)
                             ? "bg-red-500/5 border border-red-500/20"
                             : "bg-muted"
@@ -1070,7 +1070,7 @@ export default function ExecutionPage() {
                             );
                           })()}
                           {permissionRequest.targetPath && (
-                            <p className="text-sm font-mono text-muted-foreground mt-1">
+                            <p className="text-sm font-mono text-muted-foreground mt-1 break-all">
                               → {permissionRequest.targetPath}
                             </p>
                           )}
