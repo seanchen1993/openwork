@@ -18,6 +18,7 @@ import {
   GitBranch,
   Bug,
   Search,
+  AlertCircle,
 } from 'lucide-react';
 import TaskInputBar from '../components/landing/TaskInputBar';
 import QuickTaskCard from '../components/landing/QuickTaskCard';
@@ -29,6 +30,14 @@ import { springs } from '../lib/animations';
 import { Button } from '@/components/ui/button';
 import { hasAnyReadyProvider } from '@accomplish/shared';
 import { PanelSection } from '../components/layout/RightPanel';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 
 // Programming skills
@@ -96,6 +105,7 @@ const NON_PROGRAMMING_SKILLS = [
 export default function HomePage() {
   const [prompt, setPrompt] = useState('');
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [showFolderDialog, setShowFolderDialog] = useState(false);
   const {
     startTask,
     isLoading,
@@ -140,6 +150,12 @@ export default function HomePage() {
   const handleSubmit = async () => {
     if (!prompt.trim() || isLoading) return;
 
+    // Require working directory to be selected
+    if (!workingDirectory) {
+      setShowFolderDialog(true);
+      return;
+    }
+
     // Check if any provider is ready before sending (skip in E2E mode)
     const isE2EMode = await accomplish.isE2EMode();
     if (!isE2EMode) {
@@ -175,6 +191,36 @@ export default function HomePage() {
         onOpenChange={handleSettingsDialogChange}
         onApiKeySaved={handleApiKeySaved}
       />
+
+      {/* Folder Selection Required Dialog */}
+      <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Folder className="w-5 h-5 text-[var(--cowork-primary)]" />
+              选择工作文件夹
+            </DialogTitle>
+            <DialogDescription>
+              请先选择一个工作文件夹，以便在此任务期间创建和保存文件。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center justify-center py-6">
+            <FolderSelector onFolderSelect={(path) => {
+              setWorkingDirectory(path);
+              setShowFolderDialog(false);
+              // Auto-execute task after folder is selected
+              if (prompt.trim() && !isLoading) {
+                executeTask(prompt);
+              }
+            }} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowFolderDialog(false)}>
+              取消
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       
       <div className="h-full flex bg-[var(--cowork-bg)]">
         {/* Main content area */}
@@ -326,13 +372,34 @@ export default function HomePage() {
             {/* Working Folder Panel */}
             <PanelSection title="工作文件夹">
               <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
-                  <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-                    <Folder className="w-5 h-5 text-muted-foreground" />
+                {workingDirectory ? (
+                  <button
+                    onClick={async () => {
+                      if (workingDirectory) {
+                        await accomplish.openPath?.(workingDirectory);
+                      }
+                    }}
+                    className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-left"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-[var(--cowork-primary)]/10 flex items-center justify-center">
+                      <Folder className="w-5 h-5 text-[var(--cowork-primary)]" />
+                    </div>
+                    <span className="text-sm font-medium text-foreground truncate">
+                      {workingDirectory.split('/').filter(Boolean).pop() || workingDirectory}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
+                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                      <AlertCircle className="w-5 h-5 text-muted-foreground" />
+                    </div>
+                    <span className="text-sm text-muted-foreground">未选择文件夹</span>
                   </div>
-                </div>
+                )}
                 <p className="text-xs text-muted-foreground">
-                  查看和打开此任务期间创建的文件。
+                  {workingDirectory
+                    ? '工作文件夹已设置。点击可在 Finder 中打开。'
+                    : '请选择一个工作文件夹以开始任务。'}
                 </p>
               </div>
             </PanelSection>
