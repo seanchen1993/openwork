@@ -502,12 +502,35 @@ export function registerIPCHandlers(): void {
 
   // Task: Get task from history
   handle('task:get', async (_event: IpcMainInvokeEvent, taskId: string) => {
-    return getTask(taskId) || null;
+    const task = getTask(taskId);
+    if (!task) return null;
+
+    // Handle orphaned tasks: if task status is 'running' but there's no active adapter,
+    // it means the task was interrupted (e.g., app quit, crash). Mark as 'interrupted'.
+    if (task.status === 'running' && !taskManager.hasActiveTask(taskId)) {
+      console.log(`[IPC] Task ${taskId} has status 'running' but no active adapter. Marking as 'interrupted'.`);
+      updateTaskStatus(taskId, 'interrupted');
+      return { ...task, status: 'interrupted' };
+    }
+
+    return task;
   });
 
   // Task: List tasks from history
   handle('task:list', async (_event: IpcMainInvokeEvent) => {
-    return getTasks();
+    const tasks = getTasks();
+    // Fix orphaned tasks: if task status is 'running' but there's no active adapter,
+    // mark as 'interrupted' in both the returned data and the database.
+    const activeTaskIds = new Set(taskManager.getActiveTaskIds());
+    const fixedTasks = tasks.map(task => {
+      if (task.status === 'running' && !activeTaskIds.has(task.id)) {
+        console.log(`[IPC] Task ${task.id} has status 'running' but no active adapter. Marking as 'interrupted'.`);
+        updateTaskStatus(task.id, 'interrupted');
+        return { ...task, status: 'interrupted' };
+      }
+      return task;
+    });
+    return fixedTasks;
   });
 
   // Task: Delete task from history

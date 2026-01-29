@@ -14,7 +14,7 @@ import { Settings, MessageSquarePlus } from 'lucide-react';
 
 // Logo - elegant serif style like Claude
 const CmbCoworkLogo = () => (
-  <div className="flex items-center justify-center">
+  <div className="flex items-center justify-start">
     <span 
       className="text-[23px] text-foreground"
       style={{ 

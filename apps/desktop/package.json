@@ -101,7 +101,7 @@
     "npmRebuild": false,
     "compression": "store",
     "appId": "ai.accomplish.desktop",
-    "productName": "Openwork",
+    "productName": "Cmbcowork",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "release",

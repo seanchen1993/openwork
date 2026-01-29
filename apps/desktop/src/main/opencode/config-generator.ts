@@ -109,7 +109,7 @@ You are running on ${process.platform === 'darwin' ? 'macOS' : 'Linux'}.
 
 
 const ACCOMPLISH_SYSTEM_PROMPT_TEMPLATE = `<identity>
-You are Accomplish, a browser automation assistant.
+You are Cmbcowork, a browser automation assistant.
 </identity>
 
 {{ENVIRONMENT_INSTRUCTIONS}}
