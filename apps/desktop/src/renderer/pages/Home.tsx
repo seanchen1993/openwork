@@ -3,17 +3,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  FileText, 
-  BarChart3, 
-  Palette, 
-  FolderOpen, 
-  Calendar, 
+import {
+  FileText,
+  BarChart3,
+  Palette,
+  FolderOpen,
+  Calendar,
   MessageSquare,
   ArrowRight,
   Folder,
   FileText as FileIcon,
   Plus,
+  Code,
+  GitBranch,
+  Bug,
+  Search,
 } from 'lucide-react';
 import TaskInputBar from '../components/landing/TaskInputBar';
 import QuickTaskCard from '../components/landing/QuickTaskCard';
@@ -27,8 +31,30 @@ import { hasAnyReadyProvider } from '@accomplish/shared';
 import { PanelSection } from '../components/layout/RightPanel';
 
 
-// Quick task definitions - Chinese
-const QUICK_TASKS = [
+// Programming skills
+const PROGRAMMING_SKILLS = [
+  {
+    id: 'code-review',
+    title: '代码检视',
+    icon: Code,
+    prompt: '帮我进行代码检视。请提供需要检视的代码文件或路径。',
+  },
+  {
+    id: 'architecture-review',
+    title: '架构巡检',
+    icon: GitBranch,
+    prompt: '帮我进行架构巡检。请提供需要巡检的项目或模块。',
+  },
+  {
+    id: 'debug-issue',
+    title: '调试问题',
+    icon: Bug,
+    prompt: '帮我调试代码问题。请描述遇到的问题或相关代码。',
+  },
+];
+
+// Non-programming skills
+const NON_PROGRAMMING_SKILLS = [
   {
     id: 'create-file',
     title: '创建文件',
@@ -158,8 +184,14 @@ export default function HomePage() {
       
       <div className="h-full flex bg-[var(--cowork-bg)]">
         {/* Main content area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto px-8 pt-16 pb-32">
+        <div className="flex-1 flex flex-col overflow-hidden relative">
+          {/* Background grid pattern */}
+          <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{
+            backgroundImage: `radial-gradient(circle, currentColor 1px, transparent 1px)`,
+            backgroundSize: '24px 24px',
+          }} />
+
+          <div className="flex-1 overflow-y-auto px-8 pt-16 pb-32 relative">
             <div className="max-w-2xl mx-auto">
               {/* Title */}
               <motion.div
@@ -177,21 +209,43 @@ export default function HomePage() {
                 </h1>
               </motion.div>
 
-              {/* Quick Task Cards - 2 rows x 3 columns */}
+              {/* Programming Skills Section */}
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ ...springs.gentle, delay: 0.2 }}
-                className="grid grid-cols-3 gap-3"
+                className="mb-8"
               >
-                {QUICK_TASKS.map((task) => (
-                  <QuickTaskCard
-                    key={task.id}
-                    title={task.title}
-                    icon={task.icon}
-                    onClick={() => handleQuickTaskClick(task.prompt)}
-                  />
-                ))}
+                <h3 className="text-xs font-medium text-muted-foreground/70 mb-3 px-1">编程技能</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  {PROGRAMMING_SKILLS.map((task) => (
+                    <QuickTaskCard
+                      key={task.id}
+                      title={task.title}
+                      icon={task.icon}
+                      onClick={() => handleQuickTaskClick(task.prompt)}
+                    />
+                  ))}
+                </div>
+              </motion.div>
+
+              {/* Non-Programming Skills Section */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ ...springs.gentle, delay: 0.3 }}
+              >
+                <h3 className="text-xs font-medium text-muted-foreground/70 mb-3 px-1">非编程技能</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  {NON_PROGRAMMING_SKILLS.map((task) => (
+                    <QuickTaskCard
+                      key={task.id}
+                      title={task.title}
+                      icon={task.icon}
+                      onClick={() => handleQuickTaskClick(task.prompt)}
+                    />
+                  ))}
+                </div>
               </motion.div>
             </div>
           </div>
