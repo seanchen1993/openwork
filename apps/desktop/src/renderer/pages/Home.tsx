@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -106,6 +106,8 @@ export default function HomePage() {
   const [prompt, setPrompt] = useState('');
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showFolderDialog, setShowFolderDialog] = useState(false);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const hasMountedRef = useRef(false);
   const {
     startTask,
     isLoading,
@@ -116,6 +118,18 @@ export default function HomePage() {
   } = useTaskStore();
   const navigate = useNavigate();
   const accomplish = getAccomplish();
+
+  // Clear working directory when returning to home page from execution
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      // Only clear if we're not initially loading the page (i.e., returning from execution)
+      // The task store already loads the task's working directory when needed
+      return;
+    }
+    // When user navigates back to home, clear the working directory for a fresh start
+    setWorkingDirectory(null);
+  }, [setWorkingDirectory]);
 
   // Subscribe to task events
   useEffect(() => {
@@ -134,21 +148,40 @@ export default function HomePage() {
   }, [addTaskUpdate, setPermissionRequest, accomplish]);
 
   const executeTask = useCallback(async (taskPrompt: string) => {
-    if (!taskPrompt.trim() || isLoading) return;
+    if (!taskPrompt.trim() || isLoading || isExecuting) return;
 
-    const taskId = `task_${Date.now()}`;
-    const task = await startTask({ 
-      prompt: taskPrompt.trim(), 
-      taskId,
-      workingDirectory: workingDirectory || undefined,
-    });
-    if (task) {
-      navigate(`/execution/${task.id}`);
+    setIsExecuting(true);
+    try {
+      const taskId = `task_${Date.now()}`;
+      const task = await startTask({
+        prompt: taskPrompt.trim(),
+        taskId,
+        workingDirectory: workingDirectory || undefined,
+      });
+      if (task) {
+        navigate(`/execution/${task.id}`);
+      }
+    } finally {
+      setIsExecuting(false);
     }
-  }, [isLoading, startTask, navigate, workingDirectory]);
+  }, [isLoading, isExecuting, startTask, navigate, workingDirectory]);
+
+  const handleSelectFolderAndExecute = async () => {
+    try {
+      const path = await accomplish.selectFolder?.();
+      if (path) {
+        setWorkingDirectory(path);
+        setShowFolderDialog(false);
+        // Execute task after folder is selected
+        await executeTask(prompt);
+      }
+    } catch (error) {
+      console.error('Failed to select folder:', error);
+    }
+  };
 
   const handleSubmit = async () => {
-    if (!prompt.trim() || isLoading) return;
+    if (!prompt.trim() || isLoading || isExecuting) return;
 
     // Require working directory to be selected
     if (!workingDirectory) {
@@ -204,19 +237,38 @@ export default function HomePage() {
               请先选择一个工作文件夹，以便在此任务期间创建和保存文件。
             </DialogDescription>
           </DialogHeader>
-          <div className="flex items-center justify-center py-6">
-            <FolderSelector onFolderSelect={(path) => {
-              setWorkingDirectory(path);
-              setShowFolderDialog(false);
-              // Auto-execute task after folder is selected
-              if (prompt.trim() && !isLoading) {
-                executeTask(prompt);
-              }
-            }} />
+          <div className="flex flex-col items-center justify-center py-6 gap-4">
+            <div className="w-16 h-16 rounded-full bg-[var(--cowork-primary)]/10 flex items-center justify-center">
+              <Folder className="w-8 h-8 text-[var(--cowork-primary)]" />
+            </div>
+            <p className="text-sm text-muted-foreground text-center">
+              选择一个文件夹作为工作目录，所有在此任务期间创建的文件都将保存在此处。
+            </p>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowFolderDialog(false)}>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowFolderDialog(false)}
+              disabled={isExecuting}
+            >
               取消
+            </Button>
+            <Button
+              onClick={handleSelectFolderAndExecute}
+              disabled={isExecuting}
+              className="gap-2 bg-[var(--cowork-primary)] hover:bg-[var(--cowork-primary)]/90 text-white"
+            >
+              {isExecuting ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  执行中...
+                </>
+              ) : (
+                <>
+                  <FolderOpen className="w-4 h-4" />
+                  选择文件夹并开始
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -328,7 +380,7 @@ export default function HomePage() {
                     {/* Submit Button */}
                     <Button
                       onClick={handleSubmit}
-                      disabled={!prompt.trim() || isLoading}
+                      disabled={!prompt.trim() || isLoading || isExecuting}
                       className="gap-2 px-5 bg-[var(--cowork-primary)] hover:bg-[var(--cowork-primary)]/90 text-white"
                     >
                       开始
