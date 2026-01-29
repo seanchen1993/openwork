@@ -57,7 +57,15 @@ export interface OpenCodeToolCallMessage extends OpenCodeMessageBase {
 /** Tool use event - combined tool call and result from OpenCode CLI */
 export interface OpenCodeToolUseMessage extends OpenCodeMessageBase {
   type: 'tool_use';
-  part: {
+  // Flat format - actual output from OpenCode CLI
+  tool?: string;
+  state?: {
+    status: 'pending' | 'running' | 'completed' | 'error';
+    input?: unknown;
+    output?: string;
+  };
+  // Nested format - legacy structure (kept for backward compatibility)
+  part?: {
     id: string;
     sessionID: string;
     messageID: string;

@@ -848,10 +848,20 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
       // Tool use event - combined tool call and result from OpenCode CLI
       case 'tool_use':
-        const toolUseMessage = message as import('@accomplish/shared').OpenCodeToolUseMessage;
-        const toolUseName = toolUseMessage.part.tool || 'unknown';
-        const toolUseInput = toolUseMessage.part.state?.input;
-        const toolUseOutput = toolUseMessage.part.state?.output || '';
+        // The OpenCode CLI outputs tool_use in two possible formats:
+        // 1. Flat format: { type: 'tool_use', tool: '...', state: { status: ..., input: ..., output: ... } }
+        // 2. Nested format (old): { type: 'tool_use', part: { tool: '...', state: { ... } } }
+        // We need to handle both for compatibility
+        const flatToolMsg = message as unknown as { tool?: string; state?: { status?: string; input?: unknown; output?: string } };
+        const nestedToolMsg = message as import('@accomplish/shared').OpenCodeToolUseMessage;
+
+        // Try flat format first, then fall back to nested format
+        const toolUseName = flatToolMsg.tool || nestedToolMsg.part?.tool || 'unknown';
+        const toolUseInput = flatToolMsg.state?.input ?? nestedToolMsg.part?.state?.input;
+        const toolUseOutput = (flatToolMsg.state?.output ?? nestedToolMsg.part?.state?.output) || '';
+        const toolUseStatus = flatToolMsg.state?.status ?? nestedToolMsg.part?.state?.status;
+
+        console.log('[OpenCode Adapter] Tool use:', toolUseName, 'status:', toolUseStatus);
 
         // Mark first tool received and cancel waiting transition timer
         if (!this.hasReceivedFirstTool) {
@@ -887,14 +897,17 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         const toolDescription = (toolUseInput as { description?: string })?.description;
         if (toolDescription) {
           // Create a synthetic text message for the description
+          const sessionId = (message as unknown as { sessionID?: string }).sessionID || nestedToolMsg.part?.sessionID;
+          const messageId = (message as unknown as { messageID?: string }).messageID || nestedToolMsg.part?.messageID;
+
           const syntheticTextMessage: OpenCodeMessage = {
             type: 'text',
             timestamp: message.timestamp,
-            sessionID: message.sessionID,
+            sessionID: sessionId,
             part: {
               id: this.generateMessageId(),
-              sessionID: toolUseMessage.part.sessionID,
-              messageID: toolUseMessage.part.messageID,
+              sessionID: sessionId,
+              messageID: messageId,
               type: 'text',
               text: toolDescription,
             },
@@ -904,9 +917,6 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
         // Forward to handlers.ts for message processing (screenshots, etc.)
         this.emit('message', message);
-        const toolUseStatus = toolUseMessage.part.state?.status;
-
-        console.log('[OpenCode Adapter] Tool use:', toolUseName, 'status:', toolUseStatus);
 
         // Emit tool-use event for the call
         this.emit('tool-use', toolUseName, toolUseInput);

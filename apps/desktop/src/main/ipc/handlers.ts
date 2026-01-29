@@ -1482,11 +1482,21 @@ function toTaskMessage(message: OpenCodeMessage): TaskMessage | null {
 
   // Handle tool_use messages (combined tool call + result)
   if (message.type === 'tool_use') {
-    const toolUseMsg = message as import('@accomplish/shared').OpenCodeToolUseMessage;
-    const toolName = toolUseMsg.part.tool || 'unknown';
-    const toolInput = toolUseMsg.part.state?.input;
-    const toolOutput = toolUseMsg.part.state?.output || '';
-    const status = toolUseMsg.part.state?.status;
+    // The OpenCode CLI outputs tool_use in two possible formats:
+    // 1. Flat format: { type: 'tool_use', tool: '...', state: { status: ..., input: ..., output: ... } }
+    // 2. Nested format (old): { type: 'tool_use', part: { tool: '...', state: { ... } } }
+    // We need to handle both for compatibility
+
+    const flatMessage = message as { tool?: string; state?: { status?: string; input?: unknown; output?: string } };
+    const nestedMessage = message as import('@accomplish/shared').OpenCodeToolUseMessage;
+
+    // Try flat format first, then fall back to nested format
+    const toolName = flatMessage.tool || nestedMessage.part?.tool || 'unknown';
+    const toolInput = flatMessage.state?.input ?? nestedMessage.part?.state?.input;
+    const toolOutput = (flatMessage.state?.output ?? nestedMessage.part?.state?.output) || '';
+    const status = flatMessage.state?.status ?? nestedMessage.part?.state?.status;
+
+    console.log('[toTaskMessage] tool_use: toolName=', toolName, 'status=', status);
 
     // Only create message for completed/error status (not pending/running)
     if (status === 'completed' || status === 'error') {
@@ -1512,6 +1522,7 @@ function toTaskMessage(message: OpenCodeMessage): TaskMessage | null {
         attachments: attachments.length > 0 ? attachments : undefined,
       };
     }
+    // Return null for pending/running status - tool message will be created when completed
     return null;
   }
 
