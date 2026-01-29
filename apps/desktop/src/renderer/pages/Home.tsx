@@ -147,7 +147,7 @@ export default function HomePage() {
     };
   }, [addTaskUpdate, setPermissionRequest, accomplish]);
 
-  const executeTask = useCallback(async (taskPrompt: string) => {
+  const executeTask = useCallback(async (taskPrompt: string, overrideWorkingDirectory?: string) => {
     if (!taskPrompt.trim() || isLoading || isExecuting) return;
 
     setIsExecuting(true);
@@ -156,7 +156,7 @@ export default function HomePage() {
       const task = await startTask({
         prompt: taskPrompt.trim(),
         taskId,
-        workingDirectory: workingDirectory || undefined,
+        workingDirectory: overrideWorkingDirectory || workingDirectory || undefined,
       });
       if (task) {
         navigate(`/execution/${task.id}`);
@@ -172,8 +172,8 @@ export default function HomePage() {
       if (path) {
         setWorkingDirectory(path);
         setShowFolderDialog(false);
-        // Execute task after folder is selected
-        await executeTask(prompt);
+        // Execute task with the selected path directly (don't rely on state update)
+        await executeTask(prompt, path);
       }
     } catch (error) {
       console.error('Failed to select folder:', error);
