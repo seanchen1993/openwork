@@ -150,65 +150,32 @@ jobs:
 
           echo "No conflicts found, safe to proceed"
 
-      - name: Create release PR and merge
+      - name: Update version on main
         if: steps.inputs.outputs.dry_run != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.bump.outputs.new_version }}"
-          BRANCH="release/v${VERSION}"
 
-          # Check if version bump is already on main (PR merged in a previous run)
+          # Check if version bump is already on main (already updated in a previous run)
           git fetch origin main
           MAIN_VERSION=$(git show origin/main:apps/desktop/package.json | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version")
           if [ "$MAIN_VERSION" == "$VERSION" ]; then
-            echo "Version ${VERSION} already on main — PR was merged in a previous run, skipping"
+            echo "Version ${VERSION} already on main — skipping update"
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Create release branch
-          git checkout -b "$BRANCH"
+          # Directly commit to main (skip PR for personal forks)
+          git checkout main
+          git pull origin main
           git add apps/desktop/package.json
           git commit -m "chore(release): bump version to ${VERSION}"
-          git push origin "$BRANCH"
+          git push origin main
 
-          # Create PR
-          PR_URL=$(gh pr create \
-            --title "chore(release): bump version to ${VERSION}" \
-            --body "Automated release PR for v${VERSION}" \
-            --base main \
-            --head "$BRANCH")
-          echo "Created PR: $PR_URL"
-
-          # PR will be approved by Cloudflare Worker (private infrastructure)
-          # Enable auto-merge (squash)
-          gh pr merge "$BRANCH" --squash --auto --delete-branch
-
-          # Wait for PR to be merged (max 3 minutes)
-          echo "Waiting for auto-merge..."
-          for i in {1..36}; do
-            sleep 5
-            STATE=$(gh pr view "$BRANCH" --json state --jq '.state')
-            echo "PR state: $STATE"
-            if [ "$STATE" == "MERGED" ]; then
-              echo "PR merged successfully"
-              break
-            fi
-            if [ "$STATE" == "CLOSED" ]; then
-              echo "Error: PR was closed without merging"
-              exit 1
-            fi
-          done
-
-          # Verify merge happened
-          FINAL_STATE=$(gh pr view "$BRANCH" --json state --jq '.state')
-          if [ "$FINAL_STATE" != "MERGED" ]; then
-            echo "Error: PR did not merge within timeout"
-            exit 1
-          fi
+          echo "Version ${VERSION} committed to main"
 
       - name: Create and push release tag
         run: |
