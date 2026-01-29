@@ -306,7 +306,7 @@ export default function HomePage() {
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={springs.gentle}
-          className="w-[320px] h-full flex-shrink-0 border-l border-border bg-card/50 overflow-y-auto"
+          className="w-[320px] h-full flex-shrink-0 bg-[var(--cowork-bg)] overflow-y-auto"
         >
           <div className="p-4 pt-14 space-y-4">
             {/* Progress Panel */}

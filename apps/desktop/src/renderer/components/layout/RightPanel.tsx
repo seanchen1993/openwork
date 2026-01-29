@@ -45,7 +45,7 @@ export function PanelSection({
   defaultExpanded = true 
 }: PanelSectionProps) {
   return (
-    <div className="bg-card rounded-lg border border-border">
+    <div className="bg-[var(--cowork-bg)] rounded-lg border border-border">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <h3 className="text-sm font-medium text-foreground">{title}</h3>
         {action}

@@ -19,7 +19,7 @@ const CmbCoworkLogo = () => (
       className="text-[23px] text-foreground"
       style={{ 
         fontFamily: 'Tiempos, Georgia, "Times New Roman", Times, serif',
-        fontWeight: 450,
+        fontWeight: 700,
         letterSpacing: '-0.02em',
         lineHeight: 1
       }}
