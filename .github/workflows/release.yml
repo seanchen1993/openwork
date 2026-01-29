@@ -20,6 +20,7 @@ on:
         options:
           - all
           - macos-only
+          - windows-only
         default: all
       dry_run:
         description: 'Test mode - skips push to main, creates test release'
@@ -404,7 +405,7 @@ jobs:
             fi
           fi
 
-          if [ "$PLATFORMS" == "all" ]; then
+          if [ "$PLATFORMS" == "all" ] || [ "$PLATFORMS" == "windows-only" ]; then
             if [ "$WINDOWS_X64" != "success" ]; then
               echo "Error: Windows x64 build failed (result: $WINDOWS_X64)"
               FAILED=1
