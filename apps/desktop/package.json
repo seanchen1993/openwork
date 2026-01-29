@@ -192,7 +192,8 @@
     },
     "win": {
       "target": [
-        "nsis"
+        "nsis",
+        "portable"
       ],
       "icon": "resources/icon.ico"
     },
@@ -202,6 +203,9 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Openwork"
+    },
+    "portable": {
+      "useZip": true
     }
   }
 }

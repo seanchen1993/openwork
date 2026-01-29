@@ -43,12 +43,21 @@ try {
   // This avoids issues with node-pty's winpty.gyp batch file handling
   const npmRebuildFlag = isWindows ? ' --config.npmRebuild=false' : '';
 
+  // On CI Windows builds, use portable target to avoid NSIS hanging issues
+  // NSIS has known compatibility issues with GitHub Actions runners
+  // See: https://github.com/electron-userland/electron-builder/issues/8613
+  const isCi = process.env.CI === 'true';
+  const winTargetFlag = isWindows && isCi ? ' --config.win.target=portable' : '';
+
   // Use npx to run electron-builder to ensure it's found in node_modules
-  const command = `npx electron-builder ${args}${npmRebuildFlag}`;
+  const command = `npx electron-builder ${args}${npmRebuildFlag}${winTargetFlag}`;
 
   console.log('Running:', command);
   if (isWindows) {
     console.log('(Skipping native module rebuild on Windows - using prebuilt binaries)');
+    if (winTargetFlag) {
+      console.log('(Using portable target on CI to avoid NSIS issues)');
+    }
   }
 
   execSync(command, {
