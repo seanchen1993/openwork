@@ -26,8 +26,24 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
   feed(chunk: string): void {
     console.log('[StreamParser.feed] ENTER - chunk length:', chunk.length, 'first 50 chars:', chunk.substring(0, 50).replace(/\n/g, '\\n'));
 
-    // Normalize Windows line endings (\r\n -> \n) to prevent parsing issues
-    this.buffer += chunk.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    // Clean the chunk before adding to buffer
+    // Windows PTY may insert various control characters that break JSON parsing
+    let cleanedChunk = chunk;
+
+    // Normalize Windows line endings (\r\n -> \n)
+    cleanedChunk = cleanedChunk.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+    // Remove ANSI escape sequences (CSI: ESC[ ... followed by a letter)
+    cleanedChunk = cleanedChunk.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '');
+
+    // Remove OSC sequences (ESC] ... BEL or ESC)
+    cleanedChunk = cleanedChunk.replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '');
+
+    // Remove other control characters (except whitespace: \n, \t, \r)
+    // This handles cases where PTY inserts random control chars in the middle of JSON
+    cleanedChunk = cleanedChunk.replace(/[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f]/g, '');
+
+    this.buffer += cleanedChunk;
 
     console.log('[StreamParser.feed] Buffer size after adding:', this.buffer.length);
 
