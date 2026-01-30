@@ -121,20 +121,22 @@ export default function HomePage() {
     startupStage,
     todos,
     currentTask,
+    reset,
   } = useTaskStore();
   const navigate = useNavigate();
   const accomplish = getAccomplish();
 
-  // Clear working directory when returning to home page from execution
+  // Clear state when returning to home page from execution
   // Skip initial mount - only clear when navigating back from execution
   useEffect(() => {
     if (!hasMountedRef.current) {
       hasMountedRef.current = true;
       return;
     }
-    // When user navigates back to home (not initial load), clear the working directory
-    setWorkingDirectory(null);
-  }, [setWorkingDirectory]);
+    // When user navigates back to home (not initial load), reset the task state
+    // This clears progress, todos, and other task-related state
+    reset();
+  }, [reset]);
 
   // Subscribe to task events
   useEffect(() => {
