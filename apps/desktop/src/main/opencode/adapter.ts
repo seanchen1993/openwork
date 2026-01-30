@@ -1325,9 +1325,18 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
    */
   private getPlatformShell(): string {
     if (process.platform === 'win32') {
-      // On Windows, try PowerShell first, fall back to CMD
-      // Check if PowerShell exists in common locations
+      // On Windows, use CMD.exe instead of PowerShell for JSON output
+      // PowerShell has known issues with UTF-8 encoding and ANSI escape sequences
+      // that corrupt JSON output, especially with Chinese characters
       const systemRoot = process.env.SYSTEMROOT || 'C:\\Windows';
+      const cmdPath = path.join(systemRoot, 'System32', 'cmd.exe');
+
+      if (fs.existsSync(cmdPath)) {
+        return 'cmd.exe';
+      }
+
+      console.warn('[OpenCode CLI] CMD.exe not found, falling back to PowerShell');
+      // Fallback to PowerShell if cmd.exe is not available
       const psPaths = [
         path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
         path.join(systemRoot, 'SysWOW64', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
@@ -1345,7 +1354,6 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         return 'powershell.exe';
       }
 
-      console.warn('[OpenCode CLI] PowerShell not found, falling back to CMD.exe');
       return 'cmd.exe';
     }
     if (app.isPackaged && process.platform === 'darwin') {
@@ -1376,25 +1384,10 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
    */
   private getShellArgs(command: string): string[] {
     if (process.platform === 'win32') {
-      // PowerShell: Use -EncodedCommand with Base64-encoded UTF-16LE to avoid
-      // all escaping/parsing issues. This is the most reliable way to pass
-      // complex commands with quotes, special characters, etc. to PowerShell.
-      //
-      // IMPORTANT: Ensure the command is valid UTF-16LE before encoding to Base64.
-      // Chinese characters and other non-ASCII text must be properly encoded.
-      const encodedCommand = Buffer.from(command, 'utf16le').toString('base64');
-
-      // Log for diagnostics - decode to verify encoding is correct
-      const decoded = Buffer.from(encodedCommand, 'base64').toString('utf16le');
-      const encodingMatch = decoded === command;
-      if (!encodingMatch) {
-        console.error('[OpenCode CLI] CRITICAL: PowerShell encoding mismatch!');
-        console.error('[OpenCode CLI] Original command (first 200 chars):', command.substring(0, 200));
-        console.error('[OpenCode CLI] Decoded command (first 200 chars):', decoded.substring(0, 200));
-      }
-
-      console.log('[OpenCode CLI] PowerShell -EncodedCommand length:', encodedCommand.length, 'encoding match:', encodingMatch);
-      return ['-NoProfile', '-EncodedCommand', encodedCommand];
+      // Use cmd.exe instead of PowerShell for JSON output
+      // PowerShell has encoding issues with Chinese characters and corrupts JSON
+      // cmd.exe /d /c runs the command and terminates (/d disables AutoRun)
+      return ['/d', '/c', command];
     } else {
       // Unix shells: -c to run command (no -l to avoid profile loading)
       return ['-c', command];
