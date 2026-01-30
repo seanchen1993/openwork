@@ -12,13 +12,13 @@ const MAX_BUFFER_SIZE = 10 * 1024 * 1024;
 /**
  * Parses NDJSON (newline-delimited JSON) stream from OpenCode CLI
  *
- * Handles Windows PTY buffering issues where JSON lines may be fragmented
- * across multiple data chunks.
+ * Handles Windows PTY buffering issues where JSON objects may be fragmented
+ * across multiple data chunks at arbitrary positions (not at newline boundaries).
+ *
+ * Uses brace counting to detect complete JSON objects instead of line-based parsing.
  */
 export class StreamParser extends EventEmitter<StreamParserEvents> {
   private buffer: string = '';
-  // Buffer for incomplete JSON objects that started with { but failed to parse
-  private incompleteJson: string = '';
 
   /**
    * Feed raw data from stdout
@@ -29,18 +29,15 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
     // Normalize Windows line endings (\r\n -> \n) to prevent parsing issues
     this.buffer += chunk.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
-    console.log('[StreamParser.feed] Buffer size after adding:', this.buffer.length, 'lines:', this.buffer.split('\n').length);
+    console.log('[StreamParser.feed] Buffer size after adding:', this.buffer.length);
 
-    // Parse complete lines first - this extracts all complete JSON messages
-    // and leaves only the incomplete tail in the buffer
+    // Parse complete JSON objects using brace counting
+    // This handles Windows PTY fragmentation where chunks split at arbitrary positions
     this.parseBuffer();
 
     console.log('[StreamParser.feed] After parseBuffer - buffer size:', this.buffer.length);
 
-    // After parsing, buffer contains only the incomplete line (after last newline).
-    // If this single incomplete line exceeds MAX_BUFFER_SIZE, it's a pathological case
-    // (e.g., a single JSON line > 10MB, likely corrupted or malicious).
-    // We must discard it to prevent memory exhaustion.
+    // Prevent memory exhaustion from malformed data
     if (this.buffer.length > MAX_BUFFER_SIZE) {
       this.emit('error', new Error('Stream buffer size exceeded maximum limit'));
       this.buffer = '';
@@ -50,41 +47,102 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
   }
 
   /**
-   * Parse complete lines from the buffer
+   * Parse complete JSON objects from the buffer using brace counting.
+   * This handles Windows PTY fragmentation where JSON is split at arbitrary positions.
    */
   private parseBuffer(): void {
-    const lines = this.buffer.split('\n');
-    console.log('[parseBuffer] Total lines:', lines.length, 'non-empty:', lines.filter(l => l.trim()).length);
+    // Use iterative approach instead of recursive to avoid stack overflow
+    // when parsing many messages in a single buffer
+    let parsedCount = 0;
+    const MAX_ITERATIONS = 100000; // Safety limit to prevent infinite loops
 
-    // Keep incomplete line in buffer
-    this.buffer = lines.pop() || '';
+    while (this.buffer.length > 0 && parsedCount < MAX_ITERATIONS) {
+      let depth = 0;
+      let inString = false;
+      let escapeNext = false;
+      let jsonObjStart = -1;
+      let parsedOne = false;
 
-    for (const line of lines) {
-      if (line.trim()) {
-        this.parseLine(line);
+      for (let i = 0; i < this.buffer.length; i++) {
+        const char = this.buffer[i];
+
+        // Handle escape sequences in strings
+        if (escapeNext) {
+          escapeNext = false;
+          continue;
+        }
+
+        if (char === '\\') {
+          escapeNext = true;
+          continue;
+        }
+
+        // Track whether we're inside a string
+        if (char === '"') {
+          inString = !inString;
+          continue;
+        }
+
+        // Only count braces when not in a string
+        if (!inString) {
+          if (char === '{') {
+            if (depth === 0) {
+              jsonObjStart = i;
+            }
+            depth++;
+          } else if (char === '}') {
+            if (depth > 0) {
+              depth--;
+              // When depth returns to 0, we have a complete JSON object
+              if (depth === 0 && jsonObjStart >= 0) {
+                const jsonStr = this.buffer.substring(jsonObjStart, i + 1);
+                this.parseJsonObject(jsonStr);
+
+                // Remove the parsed JSON from the buffer
+                this.buffer = this.buffer.substring(i + 1);
+                console.log('[parseBuffer] Parsed JSON, remaining buffer size:', this.buffer.length);
+
+                parsedOne = true;
+                parsedCount++;
+                break; // Break out of the for loop to continue the while loop
+              }
+            }
+          }
+        }
       }
-    }
 
-    console.log('[parseBuffer] Remaining buffer size:', this.buffer.length);
+      // If we didn't parse a complete JSON object in this iteration,
+      // we've reached the end of complete JSON - exit the loop
+      if (!parsedOne) {
+        if (this.buffer.length > 0) {
+          console.log('[parseBuffer] No complete JSON found, buffer size:', this.buffer.length);
+        }
+        break;
+      }
+
+      // Otherwise, continue the while loop to parse the next JSON object
+    }
   }
 
   /**
-   * Check if a line is terminal UI decoration (not JSON)
-   * These are outputted by the CLI's interactive prompts
+   * Parse a single JSON object string
    */
-  private isTerminalDecoration(line: string): boolean {
-    const trimmed = line.trim();
-    // Box-drawing and UI characters used by the CLI's interactive prompts
-    const terminalChars = ['│', '┌', '┐', '└', '┘', '├', '┤', '┬', '┴', '┼', '─', '◆', '●', '○', '◇'];
-    // Check if line starts with a terminal decoration character
-    if (terminalChars.some(char => trimmed.startsWith(char))) {
-      return true;
+  private parseJsonObject(jsonStr: string): void {
+    const trimmed = jsonStr.trim();
+    console.log('[parseJsonObject] ENTER - string length:', trimmed.length, 'first 80 chars:', trimmed.substring(0, 80));
+
+    if (!trimmed) {
+      return;
     }
-    // Also skip ANSI escape sequences and other control characters
-    if (/^[\x00-\x1F\x7F]/.test(trimmed) || /^\x1b\[/.test(trimmed)) {
-      return true;
+
+    // Try to parse the JSON
+    const message = this.tryParseJson(trimmed);
+    if (message) {
+      this.emitMessage(message);
+    } else {
+      // JSON parse failed - this shouldn't happen with brace counting, but log it
+      console.log('[parseJsonObject] Failed to parse JSON despite complete braces');
     }
-    return false;
   }
 
   /**
@@ -104,77 +162,6 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
       console.error('[StreamParser] JSON preview (first 200 chars):', preview.replace(/\n/g, '\\n'));
       return null;
     }
-  }
-
-  /**
-   * Parse a single JSON line
-   * Handles fragmented JSON lines from Windows PTY buffering
-   */
-  private parseLine(line: string): void {
-    const trimmed = line.trim();
-    console.log('[parseLine] ENTER - line length:', trimmed.length, 'starts with {:', trimmed.startsWith('{'), 'first 80 chars:', trimmed.substring(0, 80));
-
-    // Skip empty lines
-    if (!trimmed) {
-      console.log('[parseLine] SKIP - empty line');
-      return;
-    }
-
-    // Skip terminal UI decorations (interactive prompts, box-drawing chars)
-    if (this.isTerminalDecoration(trimmed)) {
-      console.log('[parseLine] SKIP - terminal decoration');
-      return;
-    }
-
-    // If we have an incomplete JSON and current line doesn't start with {,
-    // this might be a continuation of the previous JSON
-    if (this.incompleteJson && !trimmed.startsWith('{')) {
-      // Append to incomplete JSON (the line break was removed by split)
-      this.incompleteJson += trimmed;
-
-      // Try to parse the combined JSON
-      const message = this.tryParseJson(this.incompleteJson);
-      if (message) {
-        console.log('[StreamParser] Parsed fragmented message type:', message.type);
-        this.incompleteJson = '';
-        this.emitMessage(message);
-        return;
-      }
-
-      // Still incomplete, keep buffering (but log for debugging)
-      // Don't log every fragment to avoid spam
-      console.log('[parseLine] Still incomplete after append, total length:', this.incompleteJson.length);
-      return;
-    }
-
-    // If current line starts with { but we have incomplete JSON,
-    // the previous incomplete JSON was corrupted - discard it
-    if (this.incompleteJson && trimmed.startsWith('{')) {
-      console.log('[StreamParser] Discarding incomplete JSON, new JSON started');
-      this.incompleteJson = '';
-    }
-
-    // Only attempt to parse lines that look like JSON (start with {)
-    if (!trimmed.startsWith('{')) {
-      // Log non-JSON lines for debugging but don't emit errors
-      // These could be CLI status messages, etc.
-      console.log('[parseLine] SKIP - non-JSON line, first 50 chars:', trimmed.substring(0, 50));
-      return;
-    }
-
-    // Try to parse the JSON
-    console.log('[parseLine] Attempting to parse JSON...');
-    const message = this.tryParseJson(trimmed);
-    if (message) {
-      console.log('[StreamParser] Parsed message type:', message.type);
-      this.emitMessage(message);
-      return;
-    }
-
-    // JSON parse failed - this line might be fragmented (Windows PTY issue)
-    // Save it and try to append the next line(s)
-    this.incompleteJson = trimmed;
-    console.log('[StreamParser] Buffering incomplete JSON (Windows PTY fragmentation), length:', trimmed.length);
   }
 
   /**
@@ -215,21 +202,18 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
    * Flush any remaining buffer content
    */
   flush(): void {
+    // Try to parse any remaining data in the buffer
     if (this.buffer.trim()) {
-      this.parseLine(this.buffer);
-      this.buffer = '';
-    }
-    // Also try to parse any remaining incomplete JSON
-    if (this.incompleteJson) {
-      const message = this.tryParseJson(this.incompleteJson);
+      console.log('[flush] Attempting to parse remaining buffer, size:', this.buffer.length);
+      const message = this.tryParseJson(this.buffer.trim());
       if (message) {
-        console.log('[StreamParser] Parsed remaining incomplete JSON on flush');
+        console.log('[flush] Parsed remaining JSON on flush');
         this.emitMessage(message);
       } else {
-        console.log('[StreamParser] Discarding unparseable incomplete JSON on flush');
+        console.log('[flush] Could not parse remaining buffer');
       }
-      this.incompleteJson = '';
     }
+    this.buffer = '';
   }
 
   /**
@@ -237,6 +221,5 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
    */
   reset(): void {
     this.buffer = '';
-    this.incompleteJson = '';
   }
 }
