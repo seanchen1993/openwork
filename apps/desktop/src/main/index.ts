@@ -127,6 +127,35 @@ function createWindow() {
   // Maximize window by default
   mainWindow.maximize();
 
+  // Forward main process logs to renderer for debugging
+  // This helps diagnose issues in packaged builds where terminal isn't visible
+  const originalLog = console.log;
+  const originalError = console.error;
+  const originalWarn = console.warn;
+
+  function forwardLog(type: string, args: unknown[]): void {
+    // Still log to original destination
+    originalLog.apply(console, args as unknown[]);
+
+    // Forward to renderer DevTools if window is available
+    if (mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+      const message = args
+        .map(arg => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
+        .join(' ');
+      mainWindow.webContents.executeJavaScript(`
+        if (window.__mainProcessLogs) {
+          window.__mainProcessLogs.push({ type: '${type}', message: ${JSON.stringify(message)}, timestamp: ${Date.now()} });
+        }
+      `).catch(() => {
+        // Ignore errors if DevTools isn't ready
+      });
+    }
+  }
+
+  console.log = (...args: unknown[]) => forwardLog('log', args);
+  console.error = (...args: unknown[]) => forwardLog('error', args);
+  console.warn = (...args: unknown[]) => forwardLog('warn', args);
+
   // Open DevTools in dev mode (non-packaged), but not during E2E tests
   const isE2EMode = (global as Record<string, unknown>).E2E_SKIP_AUTH === true;
   if (!app.isPackaged && !isE2EMode) {
