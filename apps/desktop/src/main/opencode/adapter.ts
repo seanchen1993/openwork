@@ -1156,19 +1156,46 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   /**
    * Build a shell command string with properly escaped arguments.
    *
-   * On Windows with -EncodedCommand (Base64), we build the command without
-   * the & operator because the encoded command will be executed directly.
-   * The & operator is only needed when passing commands as strings to PowerShell.
+   * CRITICAL: Windows cmd.exe and Unix shells use DIFFERENT escaping rules!
+   * - Unix: single quotes 'arg', inside: ' becomes '\''
+   * - Windows: double quotes "arg", inside: " becomes \", and % becomes %%
    */
   private buildShellCommand(command: string, args: string[]): string {
+    // On Windows, use Windows-style escaping (double quotes)
+    if (process.platform === 'win32') {
+      const escapedCommand = this.escapeShellArgWindows(command);
+      const escapedArgs = args.map(arg => this.escapeShellArgWindows(arg));
+      return [escapedCommand, ...escapedArgs].join(' ');
+    }
+    // On Unix, use Unix-style escaping (single quotes)
     const escapedCommand = this.escapeShellArg(command);
     const escapedArgs = args.map(arg => this.escapeShellArg(arg));
-
-    // On Windows, when using -EncodedCommand (Base64), we don't need & operator
-    // The Base64-encoded command will be executed directly by PowerShell
-    // Just join the command and args normally
     return [escapedCommand, ...escapedArgs].join(' ');
   }
+
+  /**
+   * Escape a single argument for Windows cmd.exe.
+   * Uses double quotes: "arg"
+   * Inside double quotes: " becomes \" and % becomes %% (to prevent variable expansion)
+   */
+  private escapeShellArgWindows(arg: string): string {
+    // If arg contains spaces, quotes, or special chars, wrap in double quotes
+    const needsQuoting = [" ", "\t", "&", "|", "(", ")", "<", ">", "^"].some(c => arg.includes(c));
+    if (!needsQuoting) {
+      return arg;
+    }
+    // Escape backslashes and quotes, then wrap in double quotes
+    let escaped = arg.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    // Also escape % to prevent environment variable expansion
+    escaped = escaped.replace(/%/g, '%%');
+    return `"${escaped}"`;
+  }
+
+  /**
+   * Escape a single argument for Unix shells (kept for Mac/Linux).
+   * Uses single quotes: 'arg'
+   * Inside single quotes, ' becomes '\'' (end quote, escaped quote, start quote)
+   */
 
   /**
    * COMPLETION ENFORCEMENT: Process exit handler
