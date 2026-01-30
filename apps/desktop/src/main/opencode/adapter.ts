@@ -264,7 +264,27 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     // Use temp directory as default cwd to avoid TCC permission prompts.
     // Home directory (~/) triggers TCC when the CLI scans for projects/configs
     // because it lists Desktop, Documents, etc.
-    const safeCwd = config.workingDirectory || app.getPath('temp');
+    let safeCwd = config.workingDirectory || app.getPath('temp');
+
+    // On Windows, verify the working directory path is valid and accessible
+    // This helps prevent issues with corrupted or non-ASCII paths
+    if (process.platform === 'win32' && config.workingDirectory) {
+      // Validate the working directory exists and is accessible
+      try {
+        const stats = fs.statSync(config.workingDirectory);
+        if (!stats.isDirectory()) {
+          console.warn('[OpenCode CLI] Working directory is not a directory, using temp instead:', config.workingDirectory);
+          safeCwd = app.getPath('temp');
+        }
+        // Log the working directory for diagnostics
+        console.log('[OpenCode CLI] Working directory validated:', config.workingDirectory);
+        console.log('[OpenCode CLI] Working directory exists:', fs.existsSync(config.workingDirectory));
+      } catch (err) {
+        console.warn('[OpenCode CLI] Working directory not accessible, using temp instead:', config.workingDirectory, err);
+        safeCwd = app.getPath('temp');
+      }
+    }
+
     const cwdMsg = `Working directory: ${safeCwd}`;
 
     // Create a minimal package.json in the working directory so OpenCode finds it there
@@ -701,6 +721,17 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     if (this.currentTaskId) {
       env.ACCOMPLISH_TASK_ID = this.currentTaskId;
       console.log('[OpenCode CLI] Task ID in environment:', this.currentTaskId);
+    }
+
+    // Force locale settings to prevent yargs/y18n from loading corrupted locale files
+    // This fixes the "B:\~BUN\locales\e.json" error that occurs on Windows
+    // when the locale path resolution is corrupted
+    env.LC_ALL = 'C';
+    env.LC_CTYPE = 'C';
+    env.LANG = 'en_US.UTF-8';
+    // On Windows, also set the language/region to prevent locale file issues
+    if (process.platform === 'win32') {
+      env['LANGUAGE'] = 'en';
     }
 
     this.emit('debug', { type: 'info', message: 'Environment configured with API keys' });
@@ -1274,7 +1305,21 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       // PowerShell: Use -EncodedCommand with Base64-encoded UTF-16LE to avoid
       // all escaping/parsing issues. This is the most reliable way to pass
       // complex commands with quotes, special characters, etc. to PowerShell.
+      //
+      // IMPORTANT: Ensure the command is valid UTF-16LE before encoding to Base64.
+      // Chinese characters and other non-ASCII text must be properly encoded.
       const encodedCommand = Buffer.from(command, 'utf16le').toString('base64');
+
+      // Log for diagnostics - decode to verify encoding is correct
+      const decoded = Buffer.from(encodedCommand, 'base64').toString('utf16le');
+      const encodingMatch = decoded === command;
+      if (!encodingMatch) {
+        console.error('[OpenCode CLI] CRITICAL: PowerShell encoding mismatch!');
+        console.error('[OpenCode CLI] Original command (first 200 chars):', command.substring(0, 200));
+        console.error('[OpenCode CLI] Decoded command (first 200 chars):', decoded.substring(0, 200));
+      }
+
+      console.log('[OpenCode CLI] PowerShell -EncodedCommand length:', encodedCommand.length, 'encoding match:', encodingMatch);
       return ['-NoProfile', '-EncodedCommand', encodedCommand];
     } else {
       // Unix shells: -c to run command (no -l to avoid profile loading)
