@@ -287,6 +287,48 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
     const cwdMsg = `Working directory: ${safeCwd}`;
 
+    // On Windows, pre-create stub locale files in multiple locations to prevent
+    // Bun's y18n from failing with EPERM when it tries to read from B:\~BUN\locales\C.json
+    // This is a workaround for https://github.com/anomalyco/opencode/issues/8441
+    if (process.platform === 'win32') {
+      const os = await import('os');
+      const homeDir = os.homedir();
+
+      // Get the directory where opencode.exe is located
+      const opencodeDir = path.dirname(command);
+
+      const localeDirsToCreate = [
+        // User's Bun cache directory (most likely to work)
+        path.join(homeDir, '.bun', 'locales'),
+        // Working directory Bun cache
+        path.join(safeCwd, 'node_modules', '.bun', 'locales'),
+        // Temp directory Bun cache
+        path.join(os.tmpdir(), '.bun', 'locales'),
+        // Next to opencode.exe (in case it looks relative to itself)
+        path.join(opencodeDir, '.bun', 'locales'),
+        // In the package directory
+        path.join(path.dirname(opencodeDir), '.bun', 'locales'),
+      ];
+
+      const localeFiles = ['C.json', 'en.json', 'en_US.json'];
+
+      for (const localeDir of localeDirsToCreate) {
+        for (const localeFile of localeFiles) {
+          const stubPath = path.join(localeDir, localeFile);
+          if (!fs.existsSync(stubPath)) {
+            try {
+              fs.mkdirSync(localeDir, { recursive: true });
+              fs.writeFileSync(stubPath, '{}');
+              console.log('[OpenCode CLI] Created stub locale file at:', stubPath);
+            } catch (err) {
+              // Ignore errors - some directories may not be writable
+              console.debug('[OpenCode CLI] Could not create stub locale file at:', stubPath, err);
+            }
+          }
+        }
+      }
+    }
+
     // Create a minimal package.json in the working directory so OpenCode finds it there
     // and stops searching upward. This prevents EPERM errors when OpenCode traverses
     // up to protected directories like C:\Program Files\Openwork\resources\
@@ -301,6 +343,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           console.warn('[OpenCode CLI] Could not create workspace package.json:', err);
         }
       }
+
     }
 
     console.log('[OpenCode CLI]', cmdMsg);
@@ -734,11 +777,38 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       env['LANGUAGE'] = 'en';
       // Additional Windows-specific environment variables
       env['LC_MESSAGES'] = 'en';
+      // Completely disable Bun's locale resolution on Windows
+      // Bun has a bug where it tries to read from B:\~BUN\locales\C.json
+      // which gets truncated to B:\~BUN\los\C.json and fails with EPERM
+      env['BUN_LOCALE'] = 'en';
+      env['BUN_DISABLE_LOG_COLOR'] = '1';
+      // Force Bun to use a specific cache directory instead of B:\~BUN
+      // This helps prevent the EPERM error when Bun tries to access non-existent paths
+      const os = await import('os');
+      const userCacheDir = path.join(os.homedir(), '.bun', 'cache');
+      env['BUN_INSTALL_CACHE_DIR'] = userCacheDir;
+      // Set NODE_ENV to production to reduce debug output
+      env['NODE_ENV'] = 'production';
+      // Explicitly set the locale to POSIX/C to prevent y18n from looking up locale files
+      env['LC_NUMERIC'] = 'C';
+      env['LC_TIME'] = 'C';
+      env['LC_COLLATE'] = 'C';
+      env['LC_MONETARY'] = 'C';
+      env['LC_PAPER'] = 'C';
+      env['LC_NAME'] = 'C';
+      env['LC_ADDRESS'] = 'C';
+      env['LC_TELEPHONE'] = 'C';
+      env['LC_MEASUREMENT'] = 'C';
+      env['LC_IDENTIFICATION'] = 'C';
+    } else {
+      env['BUN_LOCALE'] = 'en';
     }
     // Force yargs to skip locale detection (this works with Bun's y18n)
     env['YARGS_PARSER_MINIMAL_CONFIG'] = '1';
-    // Disable Bun's locale resolution
-    env['BUN_LOCALE'] = 'en';
+    // Additional y18n environment variable to skip locale file loading
+    env['YARGS_SKIP_VALIDATION'] = '1';
+    // Set a fake config path to prevent yargs from searching for locale files
+    env['YARGS_CONFIG_PATH'] = path.join(app.getPath('temp'), 'yargs-config.json');
 
     this.emit('debug', { type: 'info', message: 'Environment configured with API keys' });
 
