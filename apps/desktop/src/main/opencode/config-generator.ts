@@ -563,7 +563,7 @@ export function getOpenCodeAuthPath(): string {
 }
 
 /**
- * Sync API keys from Openwork's secure storage to OpenCode CLI's auth.json
+ * Sync API keys from Cmbcowork's secure storage to OpenCode CLI's auth.json
  * This allows OpenCode CLI to recognize DeepSeek and Z.AI providers
  */
 export async function syncApiKeysToOpenCodeAuth(): Promise<void> {

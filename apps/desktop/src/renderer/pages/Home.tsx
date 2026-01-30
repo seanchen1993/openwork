@@ -110,6 +110,7 @@ export default function HomePage() {
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showFolderDialog, setShowFolderDialog] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
+  const hasMountedRef = useRef(false);
   const {
     startTask,
     isLoading,
@@ -125,8 +126,13 @@ export default function HomePage() {
   const accomplish = getAccomplish();
 
   // Clear working directory when returning to home page from execution
-  // This ensures a fresh start when the user navigates back to home
+  // Skip initial mount - only clear when navigating back from execution
   useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    // When user navigates back to home (not initial load), clear the working directory
     setWorkingDirectory(null);
   }, [setWorkingDirectory]);
 

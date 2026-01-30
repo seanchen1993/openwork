@@ -1367,7 +1367,7 @@ export function registerIPCHandlers(): void {
         fs.copyFileSync(logPath, result.filePath);
       } else {
         // No logs yet - create empty file with header
-        const header = `Openwork Application Logs\nExported: ${new Date().toISOString()}\nLog Directory: ${logDir}\n\nNo logs recorded yet.\n`;
+        const header = `Cmbcowork Application Logs\nExported: ${new Date().toISOString()}\nLog Directory: ${logDir}\n\nNo logs recorded yet.\n`;
         fs.writeFileSync(result.filePath, header);
       }
 

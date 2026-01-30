@@ -219,8 +219,8 @@ if (!gotTheLock) {
         await dialog.showMessageBox({
           type: 'error',
           title: 'Update Required',
-          message: `This data was created by a newer version of Openwork (schema v${err.storedVersion}).`,
-          detail: `Your app supports up to schema v${err.appVersion}. Please update Openwork to continue.`,
+          message: `This data was created by a newer version of Cmbcowork (schema v${err.storedVersion}).`,
+          detail: `Your app supports up to schema v${err.appVersion}. Please update Cmbcowork to continue.`,
           buttons: ['Quit'],
         });
         app.quit();
