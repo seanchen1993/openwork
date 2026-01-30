@@ -28,7 +28,9 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
     this.buffer += chunk.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
     // Debug logging to help diagnose Windows PTY issues
-    console.log('[StreamParser] Feeding chunk, length:', chunk.length, 'first 100 chars:', chunk.substring(0, 100).replace(/\n/g, '\\n'));
+    const preview = chunk.substring(0, 100).replace(/\n/g, '\\n');
+    console.log('[StreamParser] Feeding chunk, length:', chunk.length, 'first 100 chars:', preview, 'hasBrace:', chunk.includes('{'));
+    console.log('[StreamParser] Buffer size after feed:', this.buffer.length);
 
     // Parse complete lines first - this extracts all complete JSON messages
     // and leaves only the incomplete tail in the buffer

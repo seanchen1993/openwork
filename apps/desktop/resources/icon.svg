@@ -1,0 +1,55 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="256" cy="256" r="256" fill="#FF6B35"/>
+
+  <!-- Lobster Body -->
+  <ellipse cx="256" cy="280" rx="90" ry="115" fill="#FFFFFF" opacity="0.95"/>
+
+  <!-- Lobster Head -->
+  <circle cx="256" cy="170" r="65" fill="#FFFFFF" opacity="0.95"/>
+
+  <!-- Lobster Tail Segments -->
+  <path d="M180 360 Q155 410 165 460" stroke="#FFFFFF" stroke-width="20" stroke-linecap="round" fill="none" opacity="0.85"/>
+  <path d="M215 375 Q200 420 210 465" stroke="#FFFFFF" stroke-width="20" stroke-linecap="round" fill="none" opacity="0.9"/>
+  <path d="M256 385 Q256 430 256 470" stroke="#FFFFFF" stroke-width="20" stroke-linecap="round" fill="none" opacity="0.95"/>
+  <path d="M297 375 Q312 420 302 465" stroke="#FFFFFF" stroke-width="20" stroke-linecap="round" fill="none" opacity="0.9"/>
+  <path d="M332 360 Q357 410 347 460" stroke="#FFFFFF" stroke-width="20" stroke-linecap="round" fill="none" opacity="0.85"/>
+
+  <!-- Left Claw -->
+  <g opacity="0.95">
+    <ellipse cx="135" cy="225" rx="46" ry="30" fill="#FFFFFF" transform="rotate(-30 135 225)"/>
+    <path d="M105 210 Q75 185 65 220" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round" fill="none"/>
+    <path d="M105 240 Q75 265 65 220" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round" fill="none"/>
+  </g>
+
+  <!-- Right Claw -->
+  <g opacity="0.95">
+    <ellipse cx="377" cy="225" rx="46" ry="30" fill="#FFFFFF" transform="rotate(30 377 225)"/>
+    <path d="M407 210 Q437 185 447 220" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round" fill="none"/>
+    <path d="M407 240 Q437 265 447 220" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round" fill="none"/>
+  </g>
+
+  <!-- Left Legs -->
+  <path d="M180 260 Q140 285 130 320" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" opacity="0.75"/>
+  <path d="M175 285 Q135 320 125 360" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" opacity="0.75"/>
+  <path d="M175 310 Q140 355 130 400" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" opacity="0.75"/>
+
+  <!-- Right Legs -->
+  <path d="M332 260 Q372 285 382 320" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" opacity="0.75"/>
+  <path d="M337 285 Q377 320 387 360" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" opacity="0.75"/>
+  <path d="M337 310 Q372 355 382 400" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" opacity="0.75"/>
+
+  <!-- Antennae -->
+  <path d="M225 130 Q190 80 170 40" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" opacity="0.85"/>
+  <path d="M287 130 Q322 80 342 40" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" opacity="0.85"/>
+
+  <!-- Eyes -->
+  <circle cx="225" cy="155" r="14" fill="white" opacity="0.95"/>
+  <circle cx="287" cy="155" r="14" fill="white" opacity="0.95"/>
+  <circle cx="228" cy="152" r="7" fill="#1a1a1a"/>
+  <circle cx="290" cy="152" r="7" fill="#1a1a1a"/>
+
+  <!-- Eye Highlights -->
+  <circle cx="232" cy="148" r="3" fill="white" opacity="0.8"/>
+  <circle cx="294" cy="148" r="3" fill="white" opacity="0.8"/>
+</svg>

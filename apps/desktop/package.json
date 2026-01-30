@@ -209,7 +209,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Openwork"
+      "shortcutName": "Cmbcowork"
     },
     "portable": {
       "useZip": true

@@ -55,7 +55,7 @@ if (process.env.CLEAN_START === '1') {
 }
 
 // Set app name before anything else (affects deep link dialogs)
-app.name = 'Openwork';
+app.name = 'Cmbcowork';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

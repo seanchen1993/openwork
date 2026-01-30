@@ -159,9 +159,9 @@ describe('SettingsDialog Integration', () => {
       // Arrange & Act
       render(<SettingsDialog {...defaultProps} />);
 
-      // Assert - new SettingsDialog uses "Set up Openwork" as title
+      // Assert - new SettingsDialog uses "Set up Cmbcowork" as title
       await waitFor(() => {
-        expect(screen.getByText('Set up Openwork')).toBeInTheDocument();
+        expect(screen.getByText('Set up Cmbcowork')).toBeInTheDocument();
       });
     });
 

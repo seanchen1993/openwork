@@ -24,7 +24,7 @@ const CmbCoworkLogo = () => (
         lineHeight: 1
       }}
     >
-      Cmb Cowork
+      Cmbcowork
     </span>
   </div>
 );

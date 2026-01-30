@@ -418,16 +418,13 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         const cleanData = data
           .replace(/\x1B\[[0-9;?]*[a-zA-Z]/g, '')  // CSI sequences (added ? for DEC modes like cursor hide)
           .replace(/\x1B\][^\x07]*\x07/g, '')       // OSC sequences with BEL terminator (window titles)
-          .replace(/\x1B\][^\x1B]*\x1B\\/g, '');    // OSC sequences with ST terminator
+          .replace(/\x1B\][^\x1B]*\x1B\\/g, '')    // OSC sequences with ST terminator
+          .replace(/\r?\n/g, '\n');               // Normalize Windows line endings
         if (cleanData.trim()) {
-          // NOTE: Removed console.log here to prevent output interleaving on Windows
-          // Windows PTY may have race conditions between console.log and PTY output
-          // causing log messages to be interleaved with JSON data, corrupting the stream
-          // The data is still available via the debug event for debugging purposes
-
           // Send full data to debug panel
           this.emit('debug', { type: 'stdout', message: cleanData });
 
+          // Feed to stream parser and log for debugging
           this.streamParser.feed(cleanData);
         }
       });
@@ -858,6 +855,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
   private setupStreamParsing(): void {
     this.streamParser.on('message', (message: OpenCodeMessage) => {
+      console.log('[OpenCode Adapter] Received message from parser, type:', message.type, 'taskId:', this.currentTaskId);
       this.handleMessage(message);
     });
 

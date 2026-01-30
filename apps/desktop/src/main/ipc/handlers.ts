@@ -346,9 +346,14 @@ export function registerIPCHandlers(): void {
     // Create task-scoped callbacks for the TaskManager
     const callbacks: TaskCallbacks = {
       onMessage: (message: OpenCodeMessage) => {
+        console.log('[IPC onMessage] Received message type:', message.type, 'for task:', taskId);
         const taskMessage = toTaskMessage(message);
-        if (!taskMessage) return;
+        if (!taskMessage) {
+          console.log('[IPC onMessage] toTaskMessage returned null, not queuing');
+          return;
+        }
 
+        console.log('[IPC onMessage] Queuing message type:', taskMessage.type);
         // Queue message for batching instead of immediate send
         queueMessage(taskId, taskMessage, forwardToRenderer, addTaskMessage);
       },
@@ -1482,9 +1487,12 @@ function sanitizeToolOutput(text: string, isError: boolean): string {
 function toTaskMessage(message: OpenCodeMessage): TaskMessage | null {
   // OpenCode format: step_start, text, tool_call, tool_use, tool_result, step_finish
 
+  console.log('[toTaskMessage] Received message type:', message.type);
+
   // Handle text content
   if (message.type === 'text') {
     if (message.part.text) {
+      console.log('[toTaskMessage] Creating text message, length:', message.part.text.length);
       return {
         id: createMessageId(),
         type: 'assistant',
@@ -1492,11 +1500,13 @@ function toTaskMessage(message: OpenCodeMessage): TaskMessage | null {
         timestamp: new Date().toISOString(),
       };
     }
+    console.log('[toTaskMessage] text message has no content, returning null');
     return null;
   }
 
   // Handle tool calls (legacy format - just shows tool is starting)
   if (message.type === 'tool_call') {
+    console.log('[toTaskMessage] Creating tool_call message for:', message.part.tool);
     return {
       id: createMessageId(),
       type: 'tool',
@@ -1550,8 +1560,10 @@ function toTaskMessage(message: OpenCodeMessage): TaskMessage | null {
       };
     }
     // Return null for pending/running status - tool message will be created when completed
+    console.log('[toTaskMessage] tool_use status is pending/running, returning null');
     return null;
   }
 
+  console.log('[toTaskMessage] Unknown message type:', message.type, ', returning null');
   return null;
 }

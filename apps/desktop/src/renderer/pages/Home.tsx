@@ -19,6 +19,9 @@ import {
   Bug,
   Search,
   AlertCircle,
+  Clock,
+  CheckCircle,
+  Check,
 } from 'lucide-react';
 import TaskInputBar from '../components/landing/TaskInputBar';
 import QuickTaskCard from '../components/landing/QuickTaskCard';
@@ -107,7 +110,6 @@ export default function HomePage() {
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showFolderDialog, setShowFolderDialog] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
-  const hasMountedRef = useRef(false);
   const {
     startTask,
     isLoading,
@@ -115,19 +117,16 @@ export default function HomePage() {
     setPermissionRequest,
     workingDirectory,
     setWorkingDirectory,
+    startupStage,
+    todos,
+    currentTask,
   } = useTaskStore();
   const navigate = useNavigate();
   const accomplish = getAccomplish();
 
   // Clear working directory when returning to home page from execution
+  // This ensures a fresh start when the user navigates back to home
   useEffect(() => {
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true;
-      // Only clear if we're not initially loading the page (i.e., returning from execution)
-      // The task store already loads the task's working directory when needed
-      return;
-    }
-    // When user navigates back to home, clear the working directory for a fresh start
     setWorkingDirectory(null);
   }, [setWorkingDirectory]);
 
@@ -403,21 +402,115 @@ export default function HomePage() {
           <div className="p-4 pt-14 space-y-4">
             {/* Progress Panel */}
             <PanelSection title="进度">
-              <div className="flex flex-col items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
-                    <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+              <div className="flex flex-col gap-3">
+                {startupStage ? (
+                  // Show startup stage when task is initializing
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-[var(--cowork-primary)]/10 flex items-center justify-center flex-shrink-0">
+                        <Clock className="w-5 h-5 text-[var(--cowork-primary)] animate-spin" style={{ animationDuration: '2s' }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {startupStage.message}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {startupStage.modelName || '初始化中...'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
-                    <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                ) : todos && todos.length > 0 ? (
+                  // Show todos when available
+                  <div className="flex flex-col gap-2">
+                    {todos.slice(0, 4).map((todo, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${
+                          todo.status === 'completed'
+                            ? 'bg-green-500/10'
+                            : todo.status === 'in_progress'
+                            ? 'bg-blue-500/10'
+                            : 'bg-muted'
+                        }`}>
+                          {todo.status === 'completed' ? (
+                            <Check className="w-3 h-3 text-green-600" />
+                          ) : todo.status === 'in_progress' ? (
+                            <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                          ) : (
+                            <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                          )}
+                        </div>
+                        <span className={`text-xs flex-1 truncate ${
+                          todo.status === 'completed'
+                            ? 'text-muted-foreground line-through'
+                            : 'text-foreground'
+                        }`}>
+                          {todo.content}
+                        </span>
+                      </div>
+                    ))}
+                    {todos.length > 4 && (
+                      <p className="text-xs text-muted-foreground text-center">
+                        还有 {todos.length - 4} 项...
+                      </p>
+                    )}
                   </div>
-                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
-                    <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                ) : currentTask ? (
+                  // Show task status
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                        currentTask.status === 'completed'
+                          ? 'bg-green-500/10'
+                          : currentTask.status === 'failed'
+                          ? 'bg-red-500/10'
+                          : currentTask.status === 'running'
+                          ? 'bg-blue-500/10'
+                          : 'bg-muted'
+                      }`}>
+                        {currentTask.status === 'completed' ? (
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                        ) : currentTask.status === 'failed' ? (
+                          <AlertCircle className="w-5 h-5 text-red-600" />
+                        ) : currentTask.status === 'running' ? (
+                          <Clock className="w-5 h-5 text-blue-600 animate-spin" style={{ animationDuration: '2s' }} />
+                        ) : (
+                          <Clock className="w-5 h-5 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {currentTask.status === 'completed' && '任务已完成'}
+                          {currentTask.status === 'failed' && '任务失败'}
+                          {currentTask.status === 'running' && '任务进行中'}
+                          {currentTask.status === 'queued' && '任务排队中'}
+                          {currentTask.status === 'interrupted' && '任务已中断'}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {currentTask.summary || currentTask.prompt}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <p className="text-xs text-muted-foreground text-center">
-                  查看较长任务的进度。
-                </p>
+                ) : (
+                  // Empty state
+                  <div className="flex flex-col items-center gap-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                      </div>
+                      <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                      </div>
+                      <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground text-center">
+                      查看较长任务的进度。
+                    </p>
+                  </div>
+                )}
               </div>
             </PanelSection>
 
