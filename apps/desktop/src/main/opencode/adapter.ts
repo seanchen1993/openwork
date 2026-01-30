@@ -1285,7 +1285,8 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       const cleanData = data
         .replace(/\x1B\[[0-9;?]*[a-zA-Z]/g, '')  // CSI sequences (added ? for DEC modes like cursor hide)
         .replace(/\x1B\][^\x07]*\x07/g, '')       // OSC sequences with BEL terminator (window titles)
-        .replace(/\x1B\][^\x1B]*\x1B\\/g, '');    // OSC sequences with ST terminator
+        .replace(/\x1B\][^\x1B]*\x1B\\/g, '')    // OSC sequences with ST terminator
+        .replace(/\r?\n/g, '\n');               // Normalize Windows line endings (IMPORTANT!)
       if (cleanData.trim()) {
         // NOTE: Removed console.log here to prevent output interleaving on Windows
         // See adapter.ts line ~359 for details
