@@ -27,6 +27,9 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
     // Normalize Windows line endings (\r\n -> \n) to prevent parsing issues
     this.buffer += chunk.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
+    // Debug logging to help diagnose Windows PTY issues
+    console.log('[StreamParser] Feeding chunk, length:', chunk.length, 'first 100 chars:', chunk.substring(0, 100).replace(/\n/g, '\\n'));
+
     // Parse complete lines first - this extracts all complete JSON messages
     // and leaves only the incomplete tail in the buffer
     this.parseBuffer();
@@ -82,7 +85,12 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
   private tryParseJson(jsonStr: string): OpenCodeMessage | null {
     try {
       return JSON.parse(jsonStr) as OpenCodeMessage;
-    } catch {
+    } catch (error) {
+      // Log JSON parsing failures to help diagnose Windows PTY issues
+      const preview = jsonStr.substring(0, 200);
+      const errorStr = error instanceof Error ? error.message : String(error);
+      console.error('[StreamParser] JSON parse failed:', errorStr);
+      console.error('[StreamParser] JSON preview (first 200 chars):', preview.replace(/\n/g, '\\n'));
       return null;
     }
   }

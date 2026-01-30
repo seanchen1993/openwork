@@ -357,9 +357,11 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           .replace(/\x1B\][^\x07]*\x07/g, '')       // OSC sequences with BEL terminator (window titles)
           .replace(/\x1B\][^\x1B]*\x1B\\/g, '');    // OSC sequences with ST terminator
         if (cleanData.trim()) {
-          // Truncate for console.log to avoid flooding terminal
-          const truncated = cleanData.substring(0, 500) + (cleanData.length > 500 ? '...' : '');
-          console.log('[OpenCode CLI stdout]:', truncated);
+          // NOTE: Removed console.log here to prevent output interleaving on Windows
+          // Windows PTY may have race conditions between console.log and PTY output
+          // causing log messages to be interleaved with JSON data, corrupting the stream
+          // The data is still available via the debug event for debugging purposes
+
           // Send full data to debug panel
           this.emit('debug', { type: 'stdout', message: cleanData });
 
@@ -1180,9 +1182,9 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         .replace(/\x1B\][^\x07]*\x07/g, '')       // OSC sequences with BEL terminator (window titles)
         .replace(/\x1B\][^\x1B]*\x1B\\/g, '');    // OSC sequences with ST terminator
       if (cleanData.trim()) {
-        // Truncate for console.log to avoid flooding terminal
-        const truncated = cleanData.substring(0, 500) + (cleanData.length > 500 ? '...' : '');
-        console.log('[OpenCode CLI stdout]:', truncated);
+        // NOTE: Removed console.log here to prevent output interleaving on Windows
+        // See adapter.ts line ~359 for details
+
         // Send full data to debug panel
         this.emit('debug', { type: 'stdout', message: cleanData });
 
