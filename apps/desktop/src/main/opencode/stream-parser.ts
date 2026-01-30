@@ -292,9 +292,91 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
     if (message) {
       this.emitMessage(message);
     } else {
-      // JSON parse failed - this shouldn't happen with brace counting, but log it
+      // JSON parse failed - try cleaning and retry once
+      const cleaned = this.cleanJsonString(trimmed);
+      if (cleaned !== trimmed) {
+        console.log('[parseJsonObject] Retrying with cleaned JSON');
+        const retryMessage = this.tryParseJson(cleaned);
+        if (retryMessage) {
+          this.emitMessage(retryMessage);
+          return;
+        }
+      }
       console.log('[parseJsonObject] Failed to parse JSON despite complete braces');
     }
+  }
+
+  /**
+   * Clean a JSON string that may have embedded control characters or corruption.
+   * This handles cases where PTY inserts garbage in the middle of JSON strings.
+   */
+  private cleanJsonString(jsonStr: string): string {
+    let cleaned = jsonStr;
+
+    // Remove any remaining control characters (except whitespace)
+    cleaned = cleaned.replace(/[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f]/g, '');
+
+    // Fix unterminated strings by truncating at the error position
+    // If a string value is cut off, we need to close it
+    const lines = cleaned.split('\n');
+    const result: string[] = [];
+
+    for (const line of lines) {
+      // Count quotes to find unterminated strings
+      let inString = false;
+      let escapeNext = false;
+      let lastValidPos = 0;
+
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+
+        if (escapeNext) {
+          escapeNext = false;
+          continue;
+        }
+
+        if (char === '\\') {
+          escapeNext = true;
+          lastValidPos = i;
+          continue;
+        }
+
+        if (char === '"') {
+          inString = !inString;
+          lastValidPos = i;
+          continue;
+        }
+
+        // If we're outside a string, this position is valid
+        if (!inString) {
+          lastValidPos = i;
+        }
+      }
+
+      // If the line ends while inString, truncate to last valid position
+      if (inString && lastValidPos < line.length - 1) {
+        // Find the last complete key-value pair or object
+        // Look for the last ',' or ':' that's outside a string
+        let truncatePos = lastValidPos;
+        for (let i = lastValidPos; i >= 0; i--) {
+          const c = line[i];
+          if (c === ',' || c === '{' || c === ':') {
+            truncatePos = i;
+            break;
+          }
+        }
+        // Truncate and close the object
+        if (truncatePos > 0 && (line[truncatePos] === ',' || line[truncatePos] === ':')) {
+          line = line.substring(0, truncatePos) + '}}';
+        } else if (truncatePos > 0) {
+          line = line.substring(0, truncatePos + 1) + '}}';
+        }
+      }
+
+      result.push(line);
+    }
+
+    return result.join('\n');
   }
 
   /**
