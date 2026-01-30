@@ -15,6 +15,17 @@ import { stopAzureFoundryProxy } from './opencode/azure-foundry-proxy';
 import { stopMoonshotProxy } from './opencode/moonshot-proxy';
 import { initializeLogCollector, shutdownLogCollector, getLogCollector } from './logging';
 
+// Global error handlers to catch startup errors
+process.on('uncaughtException', (error) => {
+  console.error('[Main] Uncaught Exception:', error);
+  console.error('[Main] Stack:', error.stack);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Main] Unhandled Rejection at:', promise);
+  console.error('[Main] Reason:', reason);
+});
+
 // Local UI - no longer uses remote URL
 
 // Early E2E flag detection - check command-line args before anything else
@@ -161,9 +172,14 @@ process.on('unhandledRejection', (reason) => {
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
-  console.log('[Main] Second instance attempted; quitting');
+  console.error('[Main] Second instance detected; another instance is already running');
+  console.error('[Main] Quitting this instance. If you believe this is an error, try:');
+  console.error('[Main]  1. Check Task Manager for running instances');
+  console.error('[Main]  2. End the existing process and try again');
+  console.error('[Main]  3. Or restart your computer');
   app.quit();
 } else {
+  console.log('[Main] Single instance lock acquired successfully');
   // Initialize logging FIRST - before anything else
   initializeLogCollector();
   getLogCollector().logEnv('INFO', 'App starting', {

@@ -6,21 +6,60 @@ import { execSync } from 'child_process';
 /**
  * Get OpenCode package name and platform-specific binary name.
  *
- * On Windows: The binary is in a platform-specific package (opencode-windows-x64)
- * On macOS/Linux: The binary is in the main opencode-ai package
+ * opencode-ai 1.1.43+ uses platform-specific packages as optional dependencies:
+ * - opencode-darwin-arm64 (macOS ARM)
+ * - opencode-darwin-x64 (macOS Intel)
+ * - opencode-linux-x64 (Linux)
+ * - opencode-windows-x64 (Windows)
+ * - opencode-windows-x64-baseline (Windows baseline)
+ *
+ * In packaged mode, we need to look for the platform-specific package.
  */
 function getOpenCodePlatformInfo(): { packageName: string; binaryName: string } {
   if (process.platform === 'win32') {
-    // On Windows, use the platform-specific package
+    // Try x64 first, then baseline
     return {
       packageName: 'opencode-windows-x64',
       binaryName: 'opencode.exe',
     };
   }
+  if (process.platform === 'darwin') {
+    // macOS - use architecture-specific package
+    const arch = process.arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64';
+    return {
+      packageName: `opencode-${arch}`,
+      binaryName: 'opencode',
+    };
+  }
+  if (process.platform === 'linux') {
+    return {
+      packageName: 'opencode-linux-x64',
+      binaryName: 'opencode',
+    };
+  }
+  // Fallback to main package
   return {
     packageName: 'opencode-ai',
     binaryName: 'opencode',
   };
+}
+
+/**
+ * Get fallback OpenCode packages to try if the primary one isn't found.
+ * This handles cases where the platform-specific package isn't installed.
+ */
+function getFallbackPackages(): string[] {
+  const packages: string[] = [];
+
+  if (process.platform === 'win32') {
+    // Try baseline on Windows
+    packages.push('opencode-windows-x64-baseline');
+  }
+
+  // Always try the main package as last resort
+  packages.push('opencode-ai');
+
+  return packages;
 }
 
 /**
@@ -60,7 +99,8 @@ export function getOpenCodeCliPath(): { command: string; args: string[] } {
     // process.resourcesPath points to Resources folder in macOS app bundle
     const { packageName, binaryName } = getOpenCodePlatformInfo();
 
-    const cliPath = path.join(
+    // Try primary package first
+    let cliPath = path.join(
       process.resourcesPath,
       'app.asar.unpacked',
       'node_modules',
@@ -69,10 +109,35 @@ export function getOpenCodeCliPath(): { command: string; args: string[] } {
       binaryName
     );
 
+    // If not found, try fallback packages
+    if (!fs.existsSync(cliPath)) {
+      console.warn(`[CLI Path] OpenCode not found at ${cliPath}, trying fallbacks...`);
+
+      for (const fallbackPackage of getFallbackPackages()) {
+        cliPath = path.join(
+          process.resourcesPath,
+          'app.asar.unpacked',
+          'node_modules',
+          fallbackPackage,
+          'bin',
+          binaryName
+        );
+
+        console.log(`[CLI Path] Trying fallback: ${cliPath}`);
+
+        if (fs.existsSync(cliPath)) {
+          console.log(`[CLI Path] Found OpenCode at fallback: ${cliPath}`);
+          break;
+        }
+      }
+    }
+
     // Verify the file exists
     if (!fs.existsSync(cliPath)) {
-      throw new Error(`OpenCode CLI not found at: ${cliPath}`);
+      throw new Error(`OpenCode CLI not found at: ${cliPath}. Tried packages: ${[packageName, ...getFallbackPackages()].join(', ')}`);
     }
+
+    console.log(`[CLI Path] Using OpenCode at: ${cliPath}`);
 
     // OpenCode binary can be run directly
     return {
@@ -154,10 +219,10 @@ function isOpenCodeOnPath(): boolean {
 export function isOpenCodeBundled(): boolean {
   try {
     if (app.isPackaged) {
-      // In packaged mode, check if opencode exists
+      // In packaged mode, check if opencode exists in platform-specific package
       const { packageName, binaryName } = getOpenCodePlatformInfo();
 
-      const cliPath = path.join(
+      let cliPath = path.join(
         process.resourcesPath,
         'app.asar.unpacked',
         'node_modules',
@@ -165,6 +230,26 @@ export function isOpenCodeBundled(): boolean {
         'bin',
         binaryName
       );
+
+      // Try fallback packages if primary not found
+      if (!fs.existsSync(cliPath)) {
+        for (const fallbackPackage of getFallbackPackages()) {
+          cliPath = path.join(
+            process.resourcesPath,
+            'app.asar.unpacked',
+            'node_modules',
+            fallbackPackage,
+            'bin',
+            binaryName
+          );
+
+          if (fs.existsSync(cliPath)) {
+            return true;
+          }
+        }
+        return false;
+      }
+
       return fs.existsSync(cliPath);
     } else {
       // In dev mode, actually verify the CLI exists
@@ -225,13 +310,30 @@ export function getBundledOpenCodeVersion(): string | null {
       // In packaged mode, read from package.json
       const { packageName } = getOpenCodePlatformInfo();
 
-      const packageJsonPath = path.join(
+      let packageJsonPath = path.join(
         process.resourcesPath,
         'app.asar.unpacked',
         'node_modules',
         packageName,
         'package.json'
       );
+
+      // Try fallback packages if primary not found
+      if (!fs.existsSync(packageJsonPath)) {
+        for (const fallbackPackage of getFallbackPackages()) {
+          packageJsonPath = path.join(
+            process.resourcesPath,
+            'app.asar.unpacked',
+            'node_modules',
+            fallbackPackage,
+            'package.json'
+          );
+
+          if (fs.existsSync(packageJsonPath)) {
+            break;
+          }
+        }
+      }
 
       if (fs.existsSync(packageJsonPath)) {
         const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
