@@ -266,13 +266,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
-
-      - name: Install Windows-specific OpenCode binary
-        run: pnpm add opencode-windows-x64@latest
-        working-directory: apps/desktop
+        run: pnpm install --frozen-lockfile
 
       - name: Download Node.js binaries
         run: pnpm -F @accomplish/desktop download:nodejs
