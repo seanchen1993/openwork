@@ -37,12 +37,6 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
 
     console.log('[StreamParser.feed] After parseBuffer - buffer size:', this.buffer.length);
 
-    // Prevent memory exhaustion from malformed data
-    if (this.buffer.length > MAX_BUFFER_SIZE) {
-      this.emit('error', new Error('Stream buffer size exceeded maximum limit'));
-      this.buffer = '';
-    }
-
     console.log('[StreamParser.feed] EXIT');
   }
 
@@ -51,12 +45,19 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
    * This handles Windows PTY fragmentation where JSON is split at arbitrary positions.
    */
   private parseBuffer(): void {
+    // First, skip any non-JSON content at the start of the buffer
+    // This handles shell banners, ANSI escape sequences, terminal decorations, etc.
+    this.skipNonJsonPrefix();
+
     // Use iterative approach instead of recursive to avoid stack overflow
     // when parsing many messages in a single buffer
     let parsedCount = 0;
     const MAX_ITERATIONS = 100000; // Safety limit to prevent infinite loops
 
     while (this.buffer.length > 0 && parsedCount < MAX_ITERATIONS) {
+      // Skip non-JSON content before each parse attempt
+      this.skipNonJsonPrefix();
+
       let depth = 0;
       let inString = false;
       let escapeNext = false;
@@ -112,9 +113,13 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
       }
 
       // If we didn't parse a complete JSON object in this iteration,
-      // we've reached the end of complete JSON - exit the loop
+      // we've reached the end of complete JSON - check if remaining buffer is too large
       if (!parsedOne) {
-        if (this.buffer.length > 0) {
+        // Check if the remaining incomplete buffer exceeds the limit
+        if (this.buffer.length > MAX_BUFFER_SIZE) {
+          this.emit('error', new Error('Stream buffer size exceeded maximum limit'));
+          this.buffer = '';
+        } else if (this.buffer.length > 0) {
           console.log('[parseBuffer] No complete JSON found, buffer size:', this.buffer.length);
         }
         break;
@@ -122,6 +127,137 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
 
       // Otherwise, continue the while loop to parse the next JSON object
     }
+  }
+
+  /**
+   * Skip non-JSON content at the start of the buffer.
+   * This handles shell banners, ANSI escape sequences, terminal decorations, etc.
+   */
+  private skipNonJsonPrefix(): void {
+    let skipCount = 0;
+    const maxSkip = 10000; // Don't skip more than 10KB at once
+
+    for (let i = 0; i < Math.min(this.buffer.length, maxSkip); i++) {
+      const char = this.buffer[i];
+
+      // If we find a '{', this might be JSON start - stop skipping
+      if (char === '{') {
+        break;
+      }
+
+      // Skip ASCII control characters (except whitespace)
+      if (char < ' ' && char !== '\n' && char !== '\r' && char !== '\t') {
+        skipCount = i + 1;
+        continue;
+      }
+
+      // Skip ANSI escape sequences
+      if (char === '\x1b' && i + 1 < this.buffer.length && this.buffer[i + 1] === '[') {
+        // CSI sequence: \x1b[ ... until a letter
+        let j = i + 2;
+        while (j < this.buffer.length && j < i + 50 && this.buffer[j] >= ' ' && this.buffer[j] <= '~') {
+          // Wait for terminator (a letter in @-Z or a-z)
+          const c = this.buffer[j];
+          if ((c >= '@' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+            skipCount = j + 1;
+            i = j;
+            break;
+          }
+          j++;
+        }
+        continue;
+      }
+
+      // Skip terminal decoration characters (box drawing, etc.) only at line start
+      if (this.isTerminalDecorationChar(char) && (i === 0 || this.buffer[i - 1] === '\n')) {
+        // Look ahead to see if this is a decoration line
+        let j = i + 1;
+        while (j < this.buffer.length && j < i + 50) {
+          const c = this.buffer[j];
+          if (c === '\n') {
+            // Entire line looks like decoration - skip it
+            skipCount = j + 1;
+            i = j;
+            break;
+          }
+          if (!this.isTerminalDecorationChar(c) && c !== ' ' && c !== '\t' && c !== '\r') {
+            // Not a decoration line - stop skipping
+            break;
+          }
+          j++;
+        }
+        continue;
+      }
+
+      // Skip whitespace and newlines
+      if (char === ' ' || char === '\t' || char === '\n' || char === '\r') {
+        skipCount = i + 1;
+        continue;
+      }
+
+      // If we get here with a non-{ char, check if it's a known garbage line pattern
+      // (like "Welcome to...", "Using...", etc.)
+      if (char !== '{' && (i === 0 || this.buffer[i - 1] === '\n')) {
+        // Check if this line looks like a shell banner/info message
+        // by looking for common patterns
+        let j = i;
+        let looksLikeBanner = true;
+        let bannerLength = 0;
+
+        // Scan until newline
+        while (j < this.buffer.length && j < i + 200 && this.buffer[j] !== '\n') {
+          const c = this.buffer[j];
+          // If we see any JSON-like structure, it's not a banner
+          if (c === '{' || c === '}' || c === ':') {
+            looksLikeBanner = false;
+            break;
+          }
+          // If we see too many non-ASCII printable chars, it's probably not a banner
+          if (c < ' ' || c > '~') {
+            // Could be binary data or Unicode - be conservative
+            looksLikeBanner = false;
+            break;
+          }
+          j++;
+          bannerLength++;
+        }
+
+        // Only skip if it's a reasonably short line that looks like a banner
+        if (looksLikeBanner && bannerLength > 0 && bannerLength < 200 && j < this.buffer.length && this.buffer[j] === '\n') {
+          skipCount = j + 1;
+          i = j;
+          continue;
+        }
+
+        // Otherwise, stop skipping - this might be valid data
+        break;
+      }
+
+      // Stop skipping for any other content
+      break;
+    }
+
+    if (skipCount > 0) {
+      this.buffer = this.buffer.substring(skipCount);
+      if (skipCount > 50) {
+        console.log('[skipNonJsonPrefix] Skipped', skipCount, 'bytes of non-JSON prefix');
+      }
+    }
+  }
+
+  /**
+   * Check if a character is a terminal decoration character
+   */
+  private isTerminalDecorationChar(char: string): boolean {
+    const code = char.charCodeAt(0);
+    // Box drawing characters (U+2500-U+257F)
+    // Block elements (U+2580-U+259F)
+    // Geometric shapes (U+25A0-U+25FF)
+    // And other common terminal decoration chars
+    return (code >= 0x2500 && code <= 0x25FF) ||
+           char === '│' || char === '┌' || char === '┐' || char === '└' || char === '┘' ||
+           char === '├' || char === '┤' || char === '┬' || char === '┴' || char === '┼' ||
+           char === '─' || char === '◆' || char === '●' || char === '○' || char === '◇';
   }
 
   /**
