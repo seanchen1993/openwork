@@ -138,7 +138,7 @@ function createWindow() {
     originalLog.apply(console, args as unknown[]);
 
     // Forward to renderer DevTools if window is available
-    if (mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+    if (mainWindow?.webContents && !mainWindow.webContents.isDestroyed()) {
       const message = args
         .map(arg => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
         .join(' ');
