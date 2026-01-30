@@ -440,24 +440,30 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   // Batch update handler for performance - processes multiple messages in single state update
   addTaskUpdateBatch: (event: TaskUpdateBatchEvent) => {
     const accomplish = getAccomplish();
+    console.log('[addTaskUpdateBatch] ENTER - event.taskId:', event.taskId, 'messageCount:', event.messages.length);
     void accomplish.logEvent({
       level: 'debug',
       message: 'UI task batch update received',
       context: { taskId: event.taskId, messageCount: event.messages.length },
     });
     set((state) => {
+      console.log('[addTaskUpdateBatch] In setState - state.currentTask?.id:', state.currentTask?.id, 'event.taskId:', event.taskId);
       if (!state.currentTask || state.currentTask.id !== event.taskId) {
+        console.log('[addTaskUpdateBatch] TASK ID MISMATCH - returning state without changes');
         return state;
       }
 
+      console.log('[addTaskUpdateBatch] TASK ID MATCH - adding', event.messages.length, 'messages to currentTask');
       // Add all messages in a single state update
       const updatedTask = {
         ...state.currentTask,
         messages: [...state.currentTask.messages, ...event.messages],
       };
 
+      console.log('[addTaskUpdateBatch] Updated task - new message count:', updatedTask.messages.length);
       return { currentTask: updatedTask, isLoading: false };
     });
+    console.log('[addTaskUpdateBatch] EXIT');
   },
 
   // Update task status (e.g., queued -> running)

@@ -368,6 +368,7 @@ export default function ExecutionPage() {
 
     // Handle batched task updates (for performance)
     const unsubscribeTaskBatch = accomplish.onTaskUpdateBatch?.((event) => {
+      console.log('[Execution onTaskUpdateBatch] CALLED - event.taskId:', event.taskId, 'current page id:', id, 'messageCount:', event.messages?.length);
       if (event.messages?.length) {
         addTaskUpdateBatch(event);
         // Track current tool from the last tool message
