@@ -424,8 +424,11 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           // Send full data to debug panel
           this.emit('debug', { type: 'stdout', message: cleanData });
 
+          // CRITICAL LOG: Confirm data is being fed to StreamParser
+          console.log('[OpenCode onData] About to feed StreamParser, data length:', cleanData.length, 'starts with {:', cleanData.trim().startsWith('{'));
           // Feed to stream parser and log for debugging
           this.streamParser.feed(cleanData);
+          console.log('[OpenCode onData] StreamParser.feed() returned');
         }
       });
 

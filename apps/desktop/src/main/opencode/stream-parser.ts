@@ -24,17 +24,18 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
    * Feed raw data from stdout
    */
   feed(chunk: string): void {
+    console.log('[StreamParser.feed] ENTER - chunk length:', chunk.length, 'first 50 chars:', chunk.substring(0, 50).replace(/\n/g, '\\n'));
+
     // Normalize Windows line endings (\r\n -> \n) to prevent parsing issues
     this.buffer += chunk.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
-    // Debug logging to help diagnose Windows PTY issues
-    const preview = chunk.substring(0, 100).replace(/\n/g, '\\n');
-    console.log('[StreamParser] Feeding chunk, length:', chunk.length, 'first 100 chars:', preview, 'hasBrace:', chunk.includes('{'));
-    console.log('[StreamParser] Buffer size after feed:', this.buffer.length);
+    console.log('[StreamParser.feed] Buffer size after adding:', this.buffer.length, 'lines:', this.buffer.split('\n').length);
 
     // Parse complete lines first - this extracts all complete JSON messages
     // and leaves only the incomplete tail in the buffer
     this.parseBuffer();
+
+    console.log('[StreamParser.feed] After parseBuffer - buffer size:', this.buffer.length);
 
     // After parsing, buffer contains only the incomplete line (after last newline).
     // If this single incomplete line exceeds MAX_BUFFER_SIZE, it's a pathological case
@@ -44,6 +45,8 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
       this.emit('error', new Error('Stream buffer size exceeded maximum limit'));
       this.buffer = '';
     }
+
+    console.log('[StreamParser.feed] EXIT');
   }
 
   /**
@@ -51,6 +54,7 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
    */
   private parseBuffer(): void {
     const lines = this.buffer.split('\n');
+    console.log('[parseBuffer] Total lines:', lines.length, 'non-empty:', lines.filter(l => l.trim()).length);
 
     // Keep incomplete line in buffer
     this.buffer = lines.pop() || '';
@@ -60,6 +64,8 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
         this.parseLine(line);
       }
     }
+
+    console.log('[parseBuffer] Remaining buffer size:', this.buffer.length);
   }
 
   /**
@@ -85,8 +91,11 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
    * Try to parse a JSON string, returns the message or null if invalid
    */
   private tryParseJson(jsonStr: string): OpenCodeMessage | null {
+    console.log('[tryParseJson] ENTER - string length:', jsonStr.length, 'first 100 chars:', jsonStr.substring(0, 100).replace(/\n/g, '\\n'));
     try {
-      return JSON.parse(jsonStr) as OpenCodeMessage;
+      const result = JSON.parse(jsonStr) as OpenCodeMessage;
+      console.log('[tryParseJson] SUCCESS - type:', result.type);
+      return result;
     } catch (error) {
       // Log JSON parsing failures to help diagnose Windows PTY issues
       const preview = jsonStr.substring(0, 200);
@@ -103,12 +112,17 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
    */
   private parseLine(line: string): void {
     const trimmed = line.trim();
+    console.log('[parseLine] ENTER - line length:', trimmed.length, 'starts with {:', trimmed.startsWith('{'), 'first 80 chars:', trimmed.substring(0, 80));
 
     // Skip empty lines
-    if (!trimmed) return;
+    if (!trimmed) {
+      console.log('[parseLine] SKIP - empty line');
+      return;
+    }
 
     // Skip terminal UI decorations (interactive prompts, box-drawing chars)
     if (this.isTerminalDecoration(trimmed)) {
+      console.log('[parseLine] SKIP - terminal decoration');
       return;
     }
 
@@ -129,6 +143,7 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
 
       // Still incomplete, keep buffering (but log for debugging)
       // Don't log every fragment to avoid spam
+      console.log('[parseLine] Still incomplete after append, total length:', this.incompleteJson.length);
       return;
     }
 
@@ -143,11 +158,12 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
     if (!trimmed.startsWith('{')) {
       // Log non-JSON lines for debugging but don't emit errors
       // These could be CLI status messages, etc.
-      console.log('[StreamParser] Skipping non-JSON line:', trimmed.substring(0, 50));
+      console.log('[parseLine] SKIP - non-JSON line, first 50 chars:', trimmed.substring(0, 50));
       return;
     }
 
     // Try to parse the JSON
+    console.log('[parseLine] Attempting to parse JSON...');
     const message = this.tryParseJson(trimmed);
     if (message) {
       console.log('[StreamParser] Parsed message type:', message.type);
@@ -158,13 +174,15 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
     // JSON parse failed - this line might be fragmented (Windows PTY issue)
     // Save it and try to append the next line(s)
     this.incompleteJson = trimmed;
-    console.log('[StreamParser] Buffering incomplete JSON (Windows PTY fragmentation)');
+    console.log('[StreamParser] Buffering incomplete JSON (Windows PTY fragmentation), length:', trimmed.length);
   }
 
   /**
    * Emit a parsed message with enhanced logging
    */
   private emitMessage(message: OpenCodeMessage): void {
+    console.log('[emitMessage] ENTER - emitting message type:', message.type);
+
     // Enhanced logging for MCP/Playwriter-related messages
     if (message.type === 'tool_call' || message.type === 'tool_result') {
       const part = message.part as Record<string, unknown>;
@@ -188,7 +206,9 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
       }
     }
 
+    console.log('[emitMessage] About to emit via EventEmitter...');
     this.emit('message', message);
+    console.log('[emitMessage] Emitted successfully');
   }
 
   /**
