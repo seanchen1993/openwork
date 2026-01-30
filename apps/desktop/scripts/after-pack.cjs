@@ -89,6 +89,9 @@ exports.default = async function afterPack(context) {
   if (platformName === 'windows') {
     await copyNodePtyPrebuilds(context, archName);
     await pruneNodePtyArm64(context, archName);
+    // Create a stub locale directory to prevent y18n "B:\~BUN\locales" error
+    // This is a workaround for Bun's y18n locale path resolution bug
+    await createStubLocaleFiles(context);
   }
 
   // Re-sign macOS apps after modifying the bundle
@@ -181,6 +184,59 @@ async function pruneNodePtyArm64(context, arch) {
       }
     }
   }
+}
+
+
+/**
+ * Create stub locale files to prevent y18n locale resolution errors.
+ *
+ * Bun's y18n implementation tries to read locale files from a corrupted path
+ * like "B:\~BUN\locales\C.json". This function creates empty locale files
+ * in the opencode binary directory to prevent the error.
+ *
+ * This is a workaround for: https://github.com/oven-sh/bun/issues/...
+ */
+async function createStubLocaleFiles(context) {
+  const { appOutDir } = context;
+
+  // Path to the opencode-windows-x64 package
+  const opencodeDir = path.join(
+    appOutDir,
+    'resources',
+    'app.asar.unpacked',
+    'node_modules',
+    'opencode-windows-x64'
+  );
+
+  if (!fs.existsSync(opencodeDir)) {
+    console.log('[after-pack] opencode-windows-x64 not found, skipping stub locale creation');
+    return;
+  }
+
+  // Create a stub locales directory with minimal locale files
+  // y18n looks for: <package_path>/locales/<locale>.json
+  const localesDir = path.join(opencodeDir, 'locales');
+
+  if (!fs.existsSync(localesDir)) {
+    fs.mkdirSync(localesDir, { recursive: true });
+    console.log('[after-pack] Created stub locales directory:', localesDir);
+  }
+
+  // Create an empty locale file for 'C' (the LC_ALL=C value)
+  const cLocaleFile = path.join(localesDir, 'C.json');
+  if (!fs.existsSync(cLocaleFile)) {
+    fs.writeFileSync(cLocaleFile, '{}', 'utf-8');
+    console.log('[after-pack] Created stub locale file: C.json');
+  }
+
+  // Also create an empty 'en' locale file (fallback)
+  const enLocaleFile = path.join(localesDir, 'en.json');
+  if (!fs.existsSync(enLocaleFile)) {
+    fs.writeFileSync(enLocaleFile, '{}', 'utf-8');
+    console.log('[after-pack] Created stub locale file: en.json');
+  }
+
+  console.log('[after-pack] Stub locale files created successfully');
 }
 
 

@@ -725,14 +725,20 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
     // Force locale settings to prevent yargs/y18n from loading corrupted locale files
     // This fixes the "B:\~BUN\locales\e.json" error that occurs on Windows
-    // when the locale path resolution is corrupted
+    // when the locale path resolution is corrupted by Bun's runtime
     env.LC_ALL = 'C';
     env.LC_CTYPE = 'C';
     env.LANG = 'en_US.UTF-8';
     // On Windows, also set the language/region to prevent locale file issues
     if (process.platform === 'win32') {
       env['LANGUAGE'] = 'en';
+      // Additional Windows-specific environment variables
+      env['LC_MESSAGES'] = 'en';
     }
+    // Force yargs to skip locale detection (this works with Bun's y18n)
+    env['YARGS_PARSER_MINIMAL_CONFIG'] = '1';
+    // Disable Bun's locale resolution
+    env['BUN_LOCALE'] = 'en';
 
     this.emit('debug', { type: 'info', message: 'Environment configured with API keys' });
 
