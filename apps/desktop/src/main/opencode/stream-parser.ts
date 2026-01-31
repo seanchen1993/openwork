@@ -309,74 +309,95 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
   /**
    * Clean a JSON string that may have embedded control characters or corruption.
    * This handles cases where PTY inserts garbage in the middle of JSON strings.
+   *
+   * Key issues handled:
+   * - Windows PTY embeds literal newlines/tabs inside JSON string values
+   * - Control characters inside strings cause JSON.parse() to fail
+   * - Unterminated strings from PTY truncation
    */
   private cleanJsonString(jsonStr: string): string {
-    let cleaned = jsonStr;
-
-    // Remove any remaining control characters (except whitespace)
-    cleaned = cleaned.replace(/[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f]/g, '');
-
-    // Fix unterminated strings by truncating at the error position
-    // If a string value is cut off, we need to close it
-    const lines = cleaned.split('\n');
+    let inString = false;
+    let escapeNext = false;
     const result: string[] = [];
 
-    for (let line of lines) {
-      // Count quotes to find unterminated strings
-      let inString = false;
-      let escapeNext = false;
-      let lastValidPos = 0;
+    for (let i = 0; i < jsonStr.length; i++) {
+      const char = jsonStr[i];
+      const code = char.charCodeAt(0);
 
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-
-        if (escapeNext) {
-          escapeNext = false;
-          continue;
-        }
-
-        if (char === '\\') {
-          escapeNext = true;
-          lastValidPos = i;
-          continue;
-        }
-
-        if (char === '"') {
-          inString = !inString;
-          lastValidPos = i;
-          continue;
-        }
-
-        // If we're outside a string, this position is valid
-        if (!inString) {
-          lastValidPos = i;
-        }
+      // Handle escape sequences
+      if (escapeNext) {
+        result.push(char);
+        escapeNext = false;
+        continue;
       }
 
-      // If the line ends while inString, truncate to last valid position
-      if (inString && lastValidPos < line.length - 1) {
-        // Find the last complete key-value pair or object
-        // Look for the last ',' or ':' that's outside a string
-        let truncatePos = lastValidPos;
-        for (let i = lastValidPos; i >= 0; i--) {
-          const c = line[i];
-          if (c === ',' || c === '{' || c === ':') {
-            truncatePos = i;
-            break;
+      // Backslash starts an escape sequence
+      if (char === '\\') {
+        result.push(char);
+        escapeNext = true;
+        continue;
+      }
+
+      // Quote toggles string mode
+      if (char === '"') {
+        inString = !inString;
+        result.push(char);
+        continue;
+      }
+
+      // Inside a string: remove problematic control characters
+      if (inString) {
+        // Remove literal newlines, tabs, and other control chars inside strings
+        // These would cause JSON.parse to fail with "Bad control character" error
+        if (code <= 0x1F || code === 0x7F) {
+          // Skip this character - don't add to result
+          // Log for debugging
+          if (code === 0x0A || code === 0x0D || code === 0x09) {
+            console.log('[cleanJsonString] Removed control char inside string:', code, 'at position', i);
           }
+          continue;
         }
-        // Truncate and close the object
-        if (truncatePos > 0 && (line[truncatePos] === ',' || line[truncatePos] === ':')) {
-          line = line.substring(0, truncatePos) + '}}';
-        } else if (truncatePos > 0) {
-          line = line.substring(0, truncatePos + 1) + '}}';
-        }
+        result.push(char);
+        continue;
       }
 
-      result.push(line);
+      // Outside a string: keep structural whitespace but remove other control chars
+      if (code === 0x0A || code === 0x0D || code === 0x09) {
+        // Keep newlines, tabs, carriage returns for structure
+        result.push(char);
+      } else if (code > 0x1F && code !== 0x7F) {
+        // Keep printable characters
+        result.push(char);
+      }
+      // Other control chars outside strings are removed
     }
 
-    return result.join('\n');
+    const cleaned = result.join('');
+
+    // If we're still in a string at the end, the JSON was truncated
+    // Try to close it properly by finding the last valid point
+    if (inString) {
+      console.log('[cleanJsonString] Unterminated string detected, attempting to close');
+      // Find the last complete structure before the truncated string
+      let lastValidPos = cleaned.length - 1;
+      for (let i = cleaned.length - 1; i >= 0; i--) {
+        const c = cleaned[i];
+        if (c === '}' || c === ']' || c === ',') {
+          lastValidPos = i;
+          break;
+        }
+        if (c === '{' || c === '[') {
+          // Found opening bracket, truncate here
+          lastValidPos = i - 1;
+          break;
+        }
+      }
+      if (lastValidPos > 0) {
+        return cleaned.substring(0, lastValidPos + 1);
+      }
+    }
+
+    return cleaned;
   }
 
   /**
