@@ -321,7 +321,7 @@ export class StreamParser extends EventEmitter<StreamParserEvents> {
     const lines = cleaned.split('\n');
     const result: string[] = [];
 
-    for (const line of lines) {
+    for (let line of lines) {
       // Count quotes to find unterminated strings
       let inString = false;
       let escapeNext = false;
