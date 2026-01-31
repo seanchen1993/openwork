@@ -11,6 +11,7 @@ import {
   getTaskManager,
   disposeTaskManager,
   type TaskCallbacks,
+  type TaskProgressEvent,
 } from '../opencode/task-manager';
 import {
   getTasks,
@@ -358,7 +359,7 @@ export function registerIPCHandlers(): void {
         queueMessage(taskId, taskMessage, forwardToRenderer, addTaskMessage);
       },
 
-      onProgress: (progress: { stage: string; message?: string }) => {
+      onProgress: (progress: TaskProgressEvent) => {
         forwardToRenderer('task:progress', {
           taskId,
           ...progress,
@@ -648,7 +649,7 @@ export function registerIPCHandlers(): void {
         queueMessage(taskId, taskMessage, forwardToRenderer, addTaskMessage);
       },
 
-      onProgress: (progress: { stage: string; message?: string }) => {
+      onProgress: (progress: TaskProgressEvent) => {
         forwardToRenderer('task:progress', {
           taskId,
           ...progress,

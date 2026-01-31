@@ -29,6 +29,7 @@ import { getAllApiKeys } from '../store/secureStorage';
 import { getSelectedModel } from '../store/appSettings';
 import { getActiveProviderModel } from '../store/providerSettings';
 import { generateOpenCodeConfig, ACCOMPLISH_AGENT_NAME } from './config-generator';
+import { getModelDisplayName } from '../utils/model-display';
 import type {
   TaskConfig,
   Task,
@@ -81,119 +82,248 @@ export interface OpenCodeAdapterEvents {
 
 /**
  * Convert SDK event to OpenCodeMessage format
- * The SDK event format differs from the current OpenCodeMessage format,
- * so we need to transform them.
+ *
+ * SDK SSE event format:
+ * {
+ *   "payload": {
+ *     "type": "message.part.updated",
+ *     "properties": {
+ *       "part": {
+ *         "type": "text" | "tool" | "step-start" | "step-finish" | ...
+ *       }
+ *     }
+ *   }
+ * }
  */
-function convertSdkEventToMessage(sdkEvent: unknown): OpenCodeMessage | null {
-  // Log the raw event for debugging
-  console.log('[Adapter] Raw SDK event:', JSON.stringify(sdkEvent, null, 2));
-
-  // The SDK event might be in different formats
-  // Try to handle as a record with known properties
+function convertSdkEventToMessage(
+  sdkEvent: unknown,
+  currentSessionId: string | null,
+  emittedToolCalls: Set<string>,
+  emittedToolResults: Set<string>,
+  emittedTextParts: Set<string>
+): OpenCodeMessage | null {
   const event = sdkEvent as Record<string, unknown>;
 
-  // Check if this is a ServerSentEvent format with data property
-  if ('data' in event && typeof event.data === 'object') {
-    const data = event.data as Record<string, unknown>;
-    const eventType = (data.type as string) || 'unknown';
-    return convertEventToMessage(eventType, data);
+  // Extract payload from SSE event
+  const payload = 'payload' in event && typeof event.payload === 'object'
+    ? (event.payload as Record<string, unknown>)
+    : event;
+
+  const eventType = (payload.type as string) || 'unknown';
+
+  // Extract properties if available
+  const props = 'properties' in payload && typeof payload.properties === 'object'
+    ? (payload.properties as Record<string, unknown>)
+    : {};
+
+  // Ignore server-level events that aren't session messages
+  if (eventType === 'server.connected' || eventType === 'server.heartbeat' || eventType === 'message.updated' || eventType === 'session.created') {
+    return null;
   }
 
-  // Direct event format
-  const eventType = (event.type as string) || 'unknown';
-  return convertEventToMessage(eventType, event);
-}
+  // Handle message.part.updated events - extract the part and filter by session
+  if (eventType === 'message.part.updated' && 'part' in props) {
+    const part = props.part as Record<string, unknown>;
 
-function convertEventToMessage(eventType: string, data: Record<string, unknown>): OpenCodeMessage | null {
-  // Extract properties from nested structure if present
-  const props = 'properties' in data && typeof data.properties === 'object'
-    ? (data.properties as Record<string, unknown>)
-    : data;
-
-  switch (eventType) {
-    case 'text': {
-      return {
-        type: 'text',
-        timestamp: Date.now(),
-        sessionID: String(props.sessionID || ''),
-        part: {
-          id: String(props.id || ''),
-          sessionID: String(props.sessionID || ''),
-          messageID: String(props.messageID || ''),
-          type: 'text',
-          text: String(props.text || ''),
-        },
-      } as OpenCodeMessage;
+    // Filter by sessionID from the part (not from properties)
+    if ('sessionID' in part && currentSessionId) {
+      const partSessionId = String(part.sessionID);
+      if (partSessionId !== currentSessionId) {
+        return null; // Ignore events for other sessions
+      }
     }
 
-    case 'tool_call':
-      return {
-        type: 'tool_call',
-        timestamp: Date.now(),
-        sessionID: String(props.sessionID || ''),
-        part: {
-          id: String(props.id || ''),
-          sessionID: String(props.sessionID || ''),
-          messageID: String(props.messageID || ''),
-          type: 'tool-call',
-          tool: String(props.tool || ''),
-          input: props.input,
-        },
-      } as OpenCodeMessage;
+    const partType = String(part.type || 'unknown');
 
-    case 'tool_result':
-      return {
-        type: 'tool_result',
-        timestamp: Date.now(),
-        sessionID: String(props.sessionID || ''),
-        part: {
-          id: String(props.id || ''),
-          sessionID: String(props.sessionID || ''),
-          messageID: String(props.messageID || ''),
-          type: 'tool-result',
-          toolCallID: String(props.toolCallID || props.toolCallId || ''),
-          output: String(props.output || ''),
-        },
-      } as OpenCodeMessage;
+    switch (partType) {
+      case 'text': {
+        const textPart = part as {
+          id: string;
+          sessionID: string;
+          messageID: string;
+          type: 'text';
+          text: string;
+          time?: {
+            start: number;
+            end?: number;
+          };
+        };
 
-    case 'step_start':
-      return {
-        type: 'step_start',
-        timestamp: Date.now(),
-        sessionID: String(props.sessionID || ''),
-        part: {
-          id: String(props.id || ''),
-          sessionID: String(props.sessionID || ''),
-          messageID: String(props.messageID || ''),
-          type: 'step-start',
-        },
-      } as OpenCodeMessage;
+        const partId = textPart.id;
 
-    case 'step_finish':
-      return {
-        type: 'step_finish',
-        timestamp: Date.now(),
-        sessionID: String(props.sessionID || ''),
-        part: {
-          id: String(props.id || ''),
-          sessionID: String(props.sessionID || ''),
-          messageID: String(props.messageID || ''),
-          type: 'step-finish',
-          reason: String(props.reason || 'stop') as 'error' | 'tool_use' | 'stop' | 'end_turn',
-        },
-      } as OpenCodeMessage;
+        // Only emit text when it's complete (has time.end)
+        // SDK sends incremental updates; we wait for completion
+        if (!textPart.time?.end) {
+          return null; // Text still being generated, wait for completion
+        }
 
-    case 'error':
-      return {
-        type: 'error',
-        timestamp: Date.now(),
-        error: String(props.error || 'Unknown error'),
-      } as OpenCodeMessage;
+        // Only emit each text part once
+        if (emittedTextParts.has(partId)) {
+          return null;
+        }
+        emittedTextParts.add(partId);
 
-    default:
-      console.log('[Adapter] Unknown SDK event type:', eventType, 'with keys:', Object.keys(props));
-      return null;
+        return {
+          type: 'text',
+          timestamp: Date.now(),
+          sessionID: textPart.sessionID,
+          part: {
+            id: textPart.id,
+            sessionID: textPart.sessionID,
+            messageID: textPart.messageID,
+            type: 'text',
+            text: textPart.text, // Send complete text
+            time: textPart.time,
+          },
+        } as OpenCodeMessage;
+      }
+
+      case 'tool': {
+        const toolPart = part as {
+          id: string;
+          sessionID: string;
+          messageID: string;
+          type: 'tool';
+          callID: string;
+          tool: string;
+          state: {
+            status: 'pending' | 'running' | 'completed' | 'error';
+            input?: { [key: string]: unknown };
+            output?: string;
+            error?: string;
+          };
+          time?: {
+            start: number;
+            end?: number;
+          };
+        };
+
+        const status = toolPart.state.status;
+        const partId = toolPart.id;
+
+        // For completed/error tools, emit tool_result event (only once per part)
+        if (status === 'completed' || status === 'error') {
+          if (emittedToolResults.has(partId)) {
+            return null; // Already emitted result for this tool
+          }
+          emittedToolResults.add(partId);
+          return {
+            type: 'tool_result',
+            timestamp: Date.now(),
+            sessionID: toolPart.sessionID,
+            part: {
+              id: toolPart.id,
+              sessionID: toolPart.sessionID,
+              messageID: toolPart.messageID,
+              type: 'tool-result',
+              toolCallID: toolPart.callID,
+              output: status === 'completed' ? (toolPart.state.output || '') : (toolPart.state.error || ''),
+              isError: status === 'error',
+              time: toolPart.time,
+            },
+          } as OpenCodeMessage;
+        }
+
+        // For pending/running tools, emit tool_call event (only once per part)
+        if (emittedToolCalls.has(partId)) {
+          return null; // Already emitted call for this tool
+        }
+        emittedToolCalls.add(partId);
+        return {
+          type: 'tool_call',
+          timestamp: Date.now(),
+          sessionID: toolPart.sessionID,
+          part: {
+            id: toolPart.id,
+            sessionID: toolPart.sessionID,
+            messageID: toolPart.messageID,
+            type: 'tool-call',
+            tool: toolPart.tool,
+            input: toolPart.state.input,
+            time: toolPart.time,
+          },
+        } as OpenCodeMessage;
+      }
+
+      case 'step-start': {
+        const stepPart = part as {
+          id: string;
+          sessionID: string;
+          messageID: string;
+          type: 'step-start';
+        };
+        return {
+          type: 'step_start',
+          timestamp: Date.now(),
+          sessionID: stepPart.sessionID,
+          part: {
+            id: stepPart.id,
+            sessionID: stepPart.sessionID,
+            messageID: stepPart.messageID,
+            type: 'step-start',
+          },
+        } as OpenCodeMessage;
+      }
+
+      case 'step-finish': {
+        const stepPart = part as {
+          id: string;
+          sessionID: string;
+          messageID: string;
+          type: 'step-finish';
+          reason: string;
+        };
+        return {
+          type: 'step_finish',
+          timestamp: Date.now(),
+          sessionID: stepPart.sessionID,
+          part: {
+            id: stepPart.id,
+            sessionID: stepPart.sessionID,
+            messageID: stepPart.messageID,
+            type: 'step-finish',
+            reason: stepPart.reason as 'error' | 'tool_use' | 'stop' | 'end_turn',
+          },
+        } as OpenCodeMessage;
+      }
+
+      default:
+        console.log('[Adapter] Unhandled part type:', partType);
+        return null;
+    }
   }
+
+  // Handle session.status events
+  if (eventType === 'session.status') {
+    return null;
+  }
+
+  // For other events (not message.part.updated), filter by sessionID in properties
+  if (eventType !== 'message.part.updated' && 'sessionID' in props && currentSessionId) {
+    const eventSessionId = String(props.sessionID);
+    if (eventSessionId !== currentSessionId) {
+      return null;
+    }
+  }
+
+  // Handle session.error events
+  if (eventType === 'session.error') {
+    const error = String(props.error || 'Unknown error');
+    return {
+      type: 'error',
+      timestamp: Date.now(),
+      error,
+    } as OpenCodeMessage;
+  }
+
+  // Handle permission.asked events
+  if (eventType === 'permission.asked') {
+    // Permission request will be handled separately
+    return null;
+  }
+
+  console.log('[Adapter] Unknown event:', eventType);
+  return null;
 }
 
 export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
@@ -213,6 +343,12 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   /** Whether the first tool has been received (to stop showing startup stages) */
   private hasReceivedFirstTool: boolean = false;
   private eventController: AbortController | null = null;
+  /** Track emitted tool calls to avoid duplicates */
+  private emittedToolCalls = new Set<string>();
+  /** Track emitted tool results to avoid duplicates */
+  private emittedToolResults = new Set<string>();
+  /** Track emitted text parts to avoid duplicates */
+  private emittedTextParts = new Set<string>();
 
   /**
    * Create a new OpenCodeAdapter instance
@@ -286,6 +422,9 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.lastWorkingDirectory = config.workingDirectory;
     this.hasReceivedFirstTool = false;
     this.isDisposed = false;
+    this.emittedToolCalls.clear();
+    this.emittedToolResults.clear();
+    this.emittedTextParts.clear();
 
     // Clear any existing waiting transition timer
     if (this.waitingTransitionTimer) {
@@ -300,8 +439,9 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.emit('progress', { stage: 'loading', message: 'Starting task...' });
 
     try {
-      // Create a new session
+      // Create a new session with working directory
       const sessionResponse = await this.client.session.create({
+        directory: config.workingDirectory,
         title: taskId,
       });
 
@@ -317,17 +457,20 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
       // Build model configuration
       const modelConfig = this.buildModelConfig();
-
-      // Send the prompt to the session
-      this.emit('progress', { stage: 'connecting', message: 'Sending prompt...' });
+      console.log('[Adapter] Model config:', JSON.stringify(modelConfig));
+      console.log('[Adapter] Working directory:', config.workingDirectory);
+      console.log('[Adapter] Prompt text:', config.prompt?.substring(0, 100));
 
       // Use promptAsync for non-blocking start
-      await this.client.session.promptAsync({
+      console.log('[Adapter] Calling promptAsync with sessionID:', this.sessionId);
+      const promptResult = await this.client.session.promptAsync({
+        directory: config.workingDirectory,
         sessionID: this.sessionId,
         model: modelConfig,
         parts: [{ type: 'text', text: config.prompt }],
         agent: ACCOMPLISH_AGENT_NAME,
       });
+      console.log('[Adapter] promptAsync result:', JSON.stringify(promptResult));
 
       return {
         id: taskId,
@@ -336,6 +479,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         messages: [],
         createdAt: new Date().toISOString(),
         startedAt: new Date().toISOString(),
+        workingDirectory: config.workingDirectory,
       };
     } catch (error) {
       console.error('[Adapter] Error starting task:', error);
@@ -378,27 +522,27 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
    * Process SSE event stream
    */
   private async processEventStream(stream: AsyncGenerator<unknown, unknown, unknown>): Promise<void> {
-    console.log('[Adapter] Starting event stream processing...');
+    console.log('[Adapter] Event stream started for session:', this.sessionId);
     try {
-      let eventCount = 0;
       for await (const event of stream) {
         if (this.isDisposed) {
-          console.log('[Adapter] Stream disposed, stopping');
           break;
         }
 
-        eventCount++;
-        console.log(`[Adapter] Received event #${eventCount}:`, typeof event, event);
-
-        const message = convertSdkEventToMessage(event);
+        const message = convertSdkEventToMessage(
+          event,
+          this.sessionId,
+          this.emittedToolCalls,
+          this.emittedToolResults,
+          this.emittedTextParts
+        );
         if (message) {
           this.handleMessage(message);
         }
       }
-      console.log(`[Adapter] Event stream ended after ${eventCount} events`);
     } catch (error) {
       if (!this.isDisposed) {
-        console.error('[Adapter] Error processing event stream:', error);
+        console.error('[Adapter] Event stream error:', error);
       }
     }
   }
@@ -572,15 +716,30 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
    * Preserved from original PTY-based adapter
    */
   private handleMessage(message: OpenCodeMessage): void {
-    console.log('[Adapter] Handling message type:', message.type);
-
     switch (message.type) {
       // Step start event
       case 'step_start':
         if (message.part?.sessionID) {
           this.sessionId = message.part.sessionID;
         }
-        this.emit('progress', { stage: 'connecting', message: 'Starting...' });
+        // Emit 'connecting' stage with model display name
+        const modelDisplayName = this.currentModelId
+          ? getModelDisplayName(this.currentModelId)
+          : 'AI';
+        this.emit('progress', {
+          stage: 'connecting',
+          message: `Connecting to ${modelDisplayName}...`,
+          modelName: modelDisplayName,
+        });
+        // Start timer to transition to 'waiting' stage after 500ms if no tool received
+        if (this.waitingTransitionTimer) {
+          clearTimeout(this.waitingTransitionTimer);
+        }
+        this.waitingTransitionTimer = setTimeout(() => {
+          if (!this.hasReceivedFirstTool && !this.hasCompleted) {
+            this.emit('progress', { stage: 'waiting', message: 'Waiting for response...' });
+          }
+        }, 500);
         break;
 
       // Text content event
@@ -632,6 +791,8 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           }
         }
 
+        // Emit message event for tool call (UI displays this in conversation)
+        this.emit('message', message);
         this.emit('tool-use', toolName, toolInput);
         this.emit('progress', { stage: 'tool-use', message: `Using ${toolName}` });
 
@@ -644,7 +805,8 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       // Tool result event
       case 'tool_result':
         const toolOutput = message.part?.output || '';
-        console.log('[Adapter] Tool result received, length:', toolOutput.length);
+        // Emit message event for tool result (UI displays this in conversation)
+        this.emit('message', message);
         this.emit('tool-result', toolOutput);
         break;
 

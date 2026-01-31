@@ -17,6 +17,7 @@ import { app } from 'electron';
 import { getOpenCodeCliPath } from './cli-path';
 import { getBundledNodePaths } from '../utils/bundled-node';
 import path from 'path';
+import fs from 'fs';
 
 export interface ServerManagerEvents {
   ready: [{ baseUrl: string; port: number }];
@@ -236,6 +237,17 @@ export class OpenCodeServerManager extends EventEmitter<ServerManagerEvents> {
           env.Path = env.PATH;
         }
       }
+    }
+
+    // Add OpenCode config directory - this is where the generated opencode.json lives
+    // The server needs to read this config to find the "accomplish" agent
+    const configDir = path.join(app.getPath('userData'), 'opencode');
+    if (fs.existsSync(configDir)) {
+      env.OPENCODE_CONFIG_DIR = configDir;
+      env.OPENCODE_CONFIG = path.join(configDir, 'opencode.json');
+      console.log('[ServerManager] Setting OPENCODE_CONFIG_DIR:', configDir);
+    } else {
+      console.warn('[ServerManager] Config directory does not exist:', configDir);
     }
 
     return env;

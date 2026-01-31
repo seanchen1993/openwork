@@ -377,6 +377,8 @@ export interface TaskCallbacks {
   onDebug?: (log: { type: string; message: string; data?: unknown }) => void;
   onTodoUpdate?: (todos: TodoItem[]) => void;
   onAuthError?: (error: { providerId: string; message: string }) => void;
+  onToolUse?: (toolName: string, toolInput: unknown) => void;
+  onToolResult?: (output: string) => void;
 }
 
 /**
@@ -543,7 +545,7 @@ export class TaskManager {
       callbacks.onMessage(message);
     };
 
-    const onProgress = (progress: { stage: string; message?: string }) => {
+    const onProgress = (progress: { stage: string; message?: string; modelName?: string }) => {
       callbacks.onProgress(progress);
     };
 
@@ -577,6 +579,14 @@ export class TaskManager {
       callbacks.onAuthError?.(error);
     };
 
+    const onToolUse = (toolName: string, toolInput: unknown) => {
+      callbacks.onToolUse?.(toolName, toolInput);
+    };
+
+    const onToolResult = (output: string) => {
+      callbacks.onToolResult?.(output);
+    };
+
     // Attach listeners
     adapter.on('message', onMessage);
     adapter.on('progress', onProgress);
@@ -585,6 +595,9 @@ export class TaskManager {
     adapter.on('error', onError);
     adapter.on('debug', onDebug);
     adapter.on('todo:update', onTodoUpdate);
+    adapter.on('auth-error', onAuthError);
+    adapter.on('tool-use', onToolUse);
+    adapter.on('tool-result', onToolResult);
     adapter.on('auth-error', onAuthError);
 
     // Create cleanup function
@@ -597,6 +610,8 @@ export class TaskManager {
       adapter.off('debug', onDebug);
       adapter.off('todo:update', onTodoUpdate);
       adapter.off('auth-error', onAuthError);
+      adapter.off('tool-use', onToolUse);
+      adapter.off('tool-result', onToolResult);
       adapter.dispose();
     };
 
