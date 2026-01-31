@@ -164,33 +164,43 @@ export class OpenCodeServerManager extends EventEmitter<ServerManagerEvents> {
   private handleServerOutput(data: string): void {
     this.outputBuffer += data;
 
-    // Log for debugging
-    if (data.trim()) {
-      console.log('[ServerManager]', data.trim());
+    // Log for debugging (but don't duplicate our own logs)
+    const trimmed = data.trim();
+    if (trimmed && !trimmed.startsWith('[ServerManager]')) {
+      console.log('[ServerManager]', trimmed);
     }
 
     // Check for startup success messages
-    // OpenCode server typically outputs something like:
-    // "OpenCode server running at http://127.0.0.1:4096"
-    // or "Server listening on port 4096"
+    // OpenCode server outputs various formats:
+    // - "OpenCode server running at http://127.0.0.1:4096"
+    // - "Server listening on port 4096"
+    // - "opencode server listening on http://127.0.0.1:4096"
 
-    const portMatch = this.outputBuffer.match(
-      /(?:listening on port|running at.*?:)(\d+)/i
-    );
+    // Try multiple regex patterns to find the port
+    const patterns = [
+      /https?:\/\/[^/:]+:(\d+)/,               // URL format: http://127.0.0.1:4096
+      /listening on (?:http:\/\/[^/:]+|port)\s*:?\s*(\d+)/i,  // "listening on http://..." or "listening on port: 4096"
+      /running at.*?:(\d+)/i,                    // "running at ...:4096"
+    ];
 
-    if (portMatch) {
-      this.serverPort = parseInt(portMatch[1], 10);
-      this.isStarting = false;
+    for (const pattern of patterns) {
+      const match = this.outputBuffer.match(pattern);
+      if (match) {
+        this.serverPort = parseInt(match[1], 10);
+        console.log('[ServerManager] ✓ Detected port:', this.serverPort);
+        this.isStarting = false;
 
-      if (this.startupTimeout) {
-        clearTimeout(this.startupTimeout);
-        this.startupTimeout = null;
+        if (this.startupTimeout) {
+          clearTimeout(this.startupTimeout);
+          this.startupTimeout = null;
+        }
+
+        this.emit('ready', {
+          baseUrl: this.getBaseUrl(),
+          port: this.serverPort,
+        });
+        return;
       }
-
-      this.emit('ready', {
-        baseUrl: this.getBaseUrl(),
-        port: this.serverPort,
-      });
     }
 
     // Check for error messages
