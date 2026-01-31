@@ -41,6 +41,7 @@
   },
   "dependencies": {
     "@accomplish/shared": "workspace:*",
+    "@opencode-ai/sdk": "^1.1.47",
     "@aws-sdk/client-bedrock": "^3.971.0",
     "@aws-sdk/credential-providers": "^3.971.0",
     "@azure/identity": "^4.13.0",

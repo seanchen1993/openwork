@@ -7,6 +7,7 @@
  */
 
 import { OpenCodeAdapter, isOpenCodeCliInstalled, OpenCodeCliNotFoundError } from './adapter';
+import { getServerManager } from './server-manager';
 import { getSkillsPath } from './config-generator';
 import { getNpxPath, getBundledNodePaths } from '../utils/bundled-node';
 import { spawn } from 'child_process';
@@ -417,9 +418,37 @@ export class TaskManager {
   private maxConcurrentTasks: number;
   /** Tracks whether this is the first task since app launch (cold start) */
   private isFirstTask: boolean = true;
+  /** OpenCode server URL (initialized on first task) */
+  private serverUrl: string | null = null;
+  /** Server initialization promise */
+  private serverInitPromise: Promise<void> | null = null;
 
   constructor(options?: { maxConcurrentTasks?: number }) {
     this.maxConcurrentTasks = options?.maxConcurrentTasks ?? DEFAULT_MAX_CONCURRENT_TASKS;
+  }
+
+  /**
+   * Ensure the OpenCode server is started and get its URL
+   */
+  private async ensureServerStarted(): Promise<string> {
+    if (this.serverUrl) {
+      return this.serverUrl;
+    }
+
+    if (this.serverInitPromise) {
+      await this.serverInitPromise;
+      return this.serverUrl!;
+    }
+
+    this.serverInitPromise = (async () => {
+      console.log('[TaskManager] Starting OpenCode server...');
+      const serverManager = getServerManager();
+      this.serverUrl = await serverManager.start();
+      console.log('[TaskManager] OpenCode server ready at:', this.serverUrl);
+    })();
+
+    await this.serverInitPromise;
+    return this.serverUrl!;
   }
 
   /**
@@ -503,8 +532,11 @@ export class TaskManager {
     config: TaskConfig,
     callbacks: TaskCallbacks
   ): Promise<Task> {
-    // Create a new adapter instance for this task
-    const adapter = new OpenCodeAdapter(taskId);
+    // Ensure OpenCode server is started
+    const serverUrl = await this.ensureServerStarted();
+
+    // Create a new adapter instance for this task with the server URL
+    const adapter = new OpenCodeAdapter(serverUrl, taskId);
 
     // Wire up event listeners
     const onMessage = (message: OpenCodeMessage) => {
@@ -825,6 +857,16 @@ export class TaskManager {
 
     this.activeTasks.clear();
     console.log('[TaskManager] All tasks disposed');
+
+    // Stop the OpenCode server
+    if (this.serverUrl) {
+      console.log('[TaskManager] Stopping OpenCode server...');
+      const serverManager = getServerManager();
+      serverManager.stop().catch((error) => {
+        console.error('[TaskManager] Error stopping server:', error);
+      });
+      this.serverUrl = null;
+    }
   }
 }
 
