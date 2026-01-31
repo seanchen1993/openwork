@@ -85,14 +85,33 @@ export interface OpenCodeAdapterEvents {
  * so we need to transform them.
  */
 function convertSdkEventToMessage(sdkEvent: unknown): OpenCodeMessage | null {
-  const event = sdkEvent as { type?: string; properties?: Record<string, unknown> };
+  // Log the raw event for debugging
+  console.log('[Adapter] Raw SDK event:', JSON.stringify(sdkEvent, null, 2));
 
-  // Handle different event types from the SDK
-  const eventType = event.type || 'unknown';
-  const props = event.properties || {};
+  // The SDK event might be in different formats
+  // Try to handle as a record with known properties
+  const event = sdkEvent as Record<string, unknown>;
+
+  // Check if this is a ServerSentEvent format with data property
+  if ('data' in event && typeof event.data === 'object') {
+    const data = event.data as Record<string, unknown>;
+    const eventType = (data.type as string) || 'unknown';
+    return convertEventToMessage(eventType, data);
+  }
+
+  // Direct event format
+  const eventType = (event.type as string) || 'unknown';
+  return convertEventToMessage(eventType, event);
+}
+
+function convertEventToMessage(eventType: string, data: Record<string, unknown>): OpenCodeMessage | null {
+  // Extract properties from nested structure if present
+  const props = 'properties' in data && typeof data.properties === 'object'
+    ? (data.properties as Record<string, unknown>)
+    : data;
 
   switch (eventType) {
-    case 'text':
+    case 'text': {
       return {
         type: 'text',
         timestamp: Date.now(),
@@ -105,6 +124,7 @@ function convertSdkEventToMessage(sdkEvent: unknown): OpenCodeMessage | null {
           text: String(props.text || ''),
         },
       } as OpenCodeMessage;
+    }
 
     case 'tool_call':
       return {
@@ -171,7 +191,7 @@ function convertSdkEventToMessage(sdkEvent: unknown): OpenCodeMessage | null {
       } as OpenCodeMessage;
 
     default:
-      console.log('[Adapter] Unknown SDK event type:', eventType, props);
+      console.log('[Adapter] Unknown SDK event type:', eventType, 'with keys:', Object.keys(props));
       return null;
   }
 }
@@ -358,17 +378,24 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
    * Process SSE event stream
    */
   private async processEventStream(stream: AsyncGenerator<unknown, unknown, unknown>): Promise<void> {
+    console.log('[Adapter] Starting event stream processing...');
     try {
+      let eventCount = 0;
       for await (const event of stream) {
         if (this.isDisposed) {
+          console.log('[Adapter] Stream disposed, stopping');
           break;
         }
+
+        eventCount++;
+        console.log(`[Adapter] Received event #${eventCount}:`, typeof event, event);
 
         const message = convertSdkEventToMessage(event);
         if (message) {
           this.handleMessage(message);
         }
       }
+      console.log(`[Adapter] Event stream ended after ${eventCount} events`);
     } catch (error) {
       if (!this.isDisposed) {
         console.error('[Adapter] Error processing event stream:', error);
